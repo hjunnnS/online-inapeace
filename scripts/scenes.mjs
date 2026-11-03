@@ -69,6 +69,7 @@ function windowPanel(group,x,z,side=0) {
   for(const sign of [-1,1])box(frame,trim,sign*.8,.78,.08,.13,3.2,.17);
   rib(frame,0,1.95,.1,.81,1.02);
   box(frame,trim,0,-.78,.13,1.91,.18,.37);
+  return frame;
 }
 function cathedral(){
   const group=new T.Group();
@@ -96,14 +97,35 @@ function cathedral(){
   box(group,dark,0,10.72,0,19,.45,39);
   for(let z=-16;z<19;z+=5.2)rib(group,0,6.2,z,8.85,4.3);
   box(group,red,0,.012,0,2.3,.024,34);
-  for(const x of [-3,0,3])windowPanel(group,x,-18.72);
+  const apseStone=material('#938c81');
+  const mortar=material('#686259');
+  const textile=material('#6586a8');
+  for(const side of [-1,0,1]){
+    const x=side*2.8,z=-18.66+Math.abs(side)*.59,turn=-side*.37;
+    const bay=new T.Group();bay.position.set(x,0,z);bay.rotation.y=turn;group.add(bay);
+    box(bay,mortar,0,5,0,3.1,9.95,.15);
+    for(let row=0;row<21;row++){
+      for(let col=0;col<6;col++){
+        const blockX=-1.29+col*.51;
+        const depth=.13+((row*11+col*7)%5)*.013;
+        box(bay,apseStone,blockX,.24+row*.46,.075,.484,.43,depth);
+      }
+    }
+    const opening=windowPanel(group,x,z+.21);
+    opening.position.y=6.62;opening.rotation.y=turn;
+  }
+  rib(group,0,2.85,-18.26,1.25,1.84);
+  for(const sign of [-1,1]){
+    box(group,textile,sign*4.71,2.95,-12.37,.42,2.18,.05);
+    box(group,trim,sign*4.71,4.07,-12.34,.56,.045,.08);
+  }
   box(group,trim,0,.12,-14.5,9,.24,6.5);
   box(group,stone,0,.31,-15,8,.22,5.5);
   blocker(group,0,-14.7,8,5);
   box(group,trim,0,1,-14.8,3.4,1.15,1.45);
   box(group,brass,0,1.62,-14.8,3.62,.13,1.59);
-  box(group,brass,0,3.05,-17.95,.19,2.62,.15);
-  box(group,brass,0,3.48,-17.95,1.35,.17,.15);
+  box(group,brass,0,2.98,-17.95,.19,2.62,.15);
+  box(group,brass,0,3.45,-17.95,1.35,.17,.15);
   const booth=new T.Group();booth.position.set(7.4,0,9.7);group.add(booth);
   box(booth,oak,0,1.25,0,2,2.5,.18);
   box(booth,oak,0,2.5,.63,2,.16,1.45);
