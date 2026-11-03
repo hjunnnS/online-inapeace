@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="바릴로체 성당의 본당을 걸으며 잠시 쉬어가는 브라우저 시제품."><title>In a Peace · 바릴로체</title></head>
+<body><main id="app">
+<div id="viewport" aria-label="성당 3D 장면"></div>
+<header><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small>바릴로체 · 아르헨티나</small></div></div><div class="top-actions"><button id="audio-open" type="button">♪ 음성</button><button id="exit" type="button" hidden>나가기</button></div></header>
+<section id="welcome" class="welcome"><div class="entry"><p class="eyebrow">PATAGONIA · 01</p><h1>바릴로체<br>대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
+<div id="notice" class="notice" role="status" hidden></div>
+<button id="retry" class="retry" type="button" hidden>다시 불러오기</button>
+<footer id="controls" hidden><span>WASD / 방향키 · 바닥 클릭으로 이동<br>드래그로 둘러보기 · 휠로 확대/축소</span><div><button id="sit" type="button">앉기</button><button id="confess" type="button">고해소로 걷기</button></div></footer>
+<dialog id="confessional"><p class="eyebrow">PRIVATE SPACE</p><h2>마음을 내려놓는 방</h2><p id="privacy">여기에 쓴 글은 이 앱이 전송하거나 저장하지 않습니다. 방을 나가면 입력이 지워집니다. 이 공간은 마음을 정리하는 체험입니다. 실제 고해성사나 사제의 응답을 제공하지 않습니다.</p><label for="thought">지금 마음에 있는 말</label><textarea id="thought" aria-describedby="privacy" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" rows="5" placeholder="비워 두어도 괜찮아요"></textarea><div class="dialog-actions"><button id="cancel" type="button">취소하고 나가기</button><button id="release" type="button" class="primary">글 내려놓기</button></div></dialog>
+<dialog id="audio-panel"><div class="panel-head"><div><p class="eyebrow">LISTEN</p><h2>잠시 듣기</h2></div><button id="audio-close" type="button" aria-label="음성 설정 닫기">✕</button></div>
+<label for="phrase">전례 문구</label><select id="phrase"></select><p id="translation"></p><p id="audio-status" role="status">정지</p><progress id="progress" max="1" value="0" aria-label="재생 위치"></progress><div class="dialog-actions"><button id="play" type="button" class="primary">재생</button><button id="stop" type="button">정지</button></div>
+<label><input id="repeat" type="checkbox"> 반복 재생</label><label>반복 간격 <select id="gap"><option value="3">3초</option><option value="8">8초</option><option value="15">15초</option></select></label>
+<label>음성 음량 <input id="voice-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label>공간 소리 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">전례 문구를 발췌한 시제품 낭독입니다.</p></dialog>
+</main><script type="module" src="/src/main.ts"></script></body></html>
