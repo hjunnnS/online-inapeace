@@ -199,52 +199,90 @@ export function makeChoir(){
   return {group,people,spotlight};
 }
 
+// Fine geometric needles, grouped into one reusable branch spray.
+function pineSpray(){
+  const vertices:number[]=[],colors:number[]=[];
+  const triangle=(a:T.Vector3,b:T.Vector3,c:T.Vector3,tint:number)=>{
+    for(const point of [a,b,c]){vertices.push(...point.toArray());colors.push(.55*tint,.83*tint,.62*tint);}
+  };
+  const needle=(base:T.Vector3,direction:T.Vector3,length:number,tint:number)=>{
+    const edge=new T.Vector3(-direction.z,0,direction.x).normalize().multiplyScalar(.009);
+    const tip=base.clone().addScaledVector(direction,length);tip.y+=.035;
+    triangle(base.clone().add(edge),base.clone().sub(edge),tip,tint);
+  };
+  for(const side of [-1,1])for(let twig=0;twig<7;twig++){
+    const origin=new T.Vector3(0,.025,.1+twig*.12),end=new T.Vector3(side*(.39-twig*.035),.05,.34+twig*.09);
+    const axis=end.clone().sub(origin),normal=new T.Vector3(axis.z,0,-axis.x).normalize();
+    for(let n=0;n<9;n++){
+      const base=origin.clone().addScaledVector(axis,n/9);
+      for(const edge of [-1,1]){
+        const direction=normal.clone().multiplyScalar(edge).add(axis.clone().normalize().multiplyScalar(.35)).normalize();
+        needle(base,direction,.09+(1-n/9)*.045,.73+((twig*7+n*3)%11)*.035);
+      }
+    }
+  }
+  for(let n=0;n<19;n++)for(const side of [-1,1])needle(new T.Vector3(0,.02,n/20),new T.Vector3(side*.8,.15,.6).normalize(),.1,.95);
+  const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(vertices,3));geometry.setAttribute('color',new T.Float32BufferAttribute(colors,3));geometry.computeVertexNormals();return geometry;
+}
+
 export function makeChristmasTree(){
   const group=new T.Group();group.position.set(-6.15,0,15.8);
   const bark=new T.MeshStandardMaterial({color:'#59412a',roughness:1});
-  const greens=['#173b2e','#204d38','#285a40'].map(color=>new T.MeshStandardMaterial({color,roughness:.96}));
+  const greens=['#214d34','#326646','#3c7050'].map(color=>new T.MeshStandardMaterial({color,roughness:.88,side:T.DoubleSide,vertexColors:true}));
+  const radiusAt=(y:number)=>2.15*Math.pow(Math.max(.015,1-(y-.65)/6.1),.84);
   const gold=new T.MeshStandardMaterial({color:'#cba34f',metalness:.75,roughness:.26});
   mesh(group,new T.CylinderGeometry(.2,.3,1.2,16),bark,[0,.6,0]);
   mesh(group,new T.CylinderGeometry(2.1,2.16,.08,48),new T.MeshStandardMaterial({color:'#772d35',roughness:1}),[0,.06,0]);
-  for(let tier=0;tier<8;tier++){
-    const radius=2.05-tier*.23;
-    const branch=mesh(group,new T.ConeGeometry(radius,1.8,40),greens[tier%3],[0,1.45+tier*.68,0]);
-    branch.rotation.y=tier*.36;
-    for(let side=0;side<7;side++){
-      const angle=side*Math.PI*2/7+tier*.55;
-      const tip=mesh(group,new T.ConeGeometry(radius*.37,1.1,9),greens[(tier+side)%3],[Math.cos(angle)*radius*.69,1+tier*.68,Math.sin(angle)*radius*.69]);
-      tip.rotation.z=Math.sin(angle)*.2;tip.rotation.x=Math.cos(angle)*.2;
+  // A dark interior is covered by hundreds of fine, irregular branch sprays.
+  mesh(group,new T.ConeGeometry(1.45,5.9,24),new T.MeshStandardMaterial({color:'#123526',roughness:1}),[0,3.4,0]);
+  const spray=pineSpray(),branches:{y:number;angle:number;radius:number;scale:number;tilt:number}[]=[];
+  for(let tier=0;tier<25;tier++){
+    const y=.65+tier*.235,radius=radiusAt(y),count=Math.round(30-tier*.77);
+    for(let i=0;i<count;i++){
+      const angle=i*Math.PI*2/count+tier*2.39996,scale=.85+((i*13+tier*7)%11)*.025;
+      branches.push({y:y+Math.sin(i*7+tier)*.075,angle,radius,scale,tilt:-.12});
+      branches.push({y:y+.1+Math.sin(i*3)*.1,angle:angle+.09,radius:radius*.91,scale:scale*.92,tilt:.52});
     }
   }
-  const ballGeometry=new T.SphereGeometry(.105,12,10),dummy=new T.Object3D();
+  const branchDummy=new T.Object3D();
+  for(let tint=0;tint<3;tint++){
+    const chosen=branches.filter((_,i)=>i%3===tint),foliage=new T.InstancedMesh(spray,greens[tint],chosen.length);
+    chosen.forEach((branch,i)=>{
+      const {y,angle,radius,scale,tilt}=branch;
+      branchDummy.position.set(Math.sin(angle)*radius*.27,y,Math.cos(angle)*radius*.27);
+      branchDummy.rotation.set(tilt+Math.sin(i)*.08,angle,Math.sin(i*2.1)*.12);
+      branchDummy.scale.set((.7+radius*.26)*scale,.8,(radius*.8+.1)*scale);branchDummy.updateMatrix();foliage.setMatrixAt(i,branchDummy.matrix);
+    });group.add(foliage);
+  }
+  const ballGeometry=new T.SphereGeometry(.105,20,14),dummy=new T.Object3D();
   for(const [color,offset] of [['#b6353f',0],['#d8b46a',1],['#d9d9c9',2]] as const){
-    const balls=new T.InstancedMesh(ballGeometry,new T.MeshStandardMaterial({color,metalness:.7,roughness:.25}),22);
-    for(let i=0;i<22;i++){
-      const height=.95+(i/22)*4.9,angle=i*2.39996+offset*2.1;
-      const radius=2.08-(height-.8)*.27;
+    const balls=new T.InstancedMesh(ballGeometry,new T.MeshStandardMaterial({color,metalness:.7,roughness:.16}),32);
+    for(let i=0;i<32;i++){
+      const height=.95+(i/32)*5.1,angle=i*2.39996+offset*2.1;
+      const radius=radiusAt(height)+.09;
       dummy.position.set(Math.cos(angle)*radius,height,Math.sin(angle)*radius);dummy.scale.setScalar(.85+(i%3)*.18);dummy.updateMatrix();balls.setMatrixAt(i,dummy.matrix);
     }
     group.add(balls);
   }
   const wirePoints:T.Vector3[]=[];
   for(let i=0;i<=160;i++){
-    const y=.9+i/160*5.4,angle=i/160*Math.PI*12,radius=2.08-(y-.8)*.29;
+    const y=.9+i/160*5.4,angle=i/160*Math.PI*12,radius=radiusAt(y)+.12;
     wirePoints.push(new T.Vector3(Math.cos(angle)*radius,y,Math.sin(angle)*radius));
   }
   mesh(group,new T.TubeGeometry(new T.CatmullRomCurve3(wirePoints),180,.012,5,false),gold,[0,0,0]);
-  const bulbs=new T.InstancedMesh(new T.SphereGeometry(.037,7,6),new T.MeshBasicMaterial({color:'#ffe3a4'}),100);
-  for(let i=0;i<100;i++){dummy.position.copy(wirePoints[Math.floor(i/100*160)]);dummy.scale.setScalar(1);dummy.updateMatrix();bulbs.setMatrixAt(i,dummy.matrix);}
+  const bulbs=new T.InstancedMesh(new T.SphereGeometry(.045,8,7),new T.MeshBasicMaterial({color:'#ffe3a4'}),180);
+  for(let i=0;i<180;i++){dummy.position.copy(wirePoints[Math.floor(i/180*160)]);dummy.scale.setScalar(1);dummy.updateMatrix();bulbs.setMatrixAt(i,dummy.matrix);}
   group.add(bulbs);
   const glowMap=texture((ctx,s)=>{
     const glow=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
     glow.addColorStop(0,'#fff5d9ff');glow.addColorStop(.15,'#ffe0a5cc');glow.addColorStop(.45,'#ffd28a44');glow.addColorStop(1,'#ffd28a00');
     ctx.fillStyle=glow;ctx.fillRect(0,0,s,s);
   },32);
-  const glowGeometry=new T.BufferGeometry(),positions=new Float32Array(300),colors=new Float32Array(300);
-  for(let i=0;i<100;i++){const point=wirePoints[Math.floor(i/100*160)];positions.set(point.toArray(),i*3);}
+  const glowGeometry=new T.BufferGeometry(),positions=new Float32Array(540),colors=new Float32Array(540);
+  for(let i=0;i<180;i++){const point=wirePoints[Math.floor(i/180*160)];positions.set(point.toArray(),i*3);}
   glowGeometry.setAttribute('position',new T.BufferAttribute(positions,3));
   glowGeometry.setAttribute('color',new T.BufferAttribute(colors,3));
-  const glowMaterial=new T.PointsMaterial({map:glowMap,size:.25,vertexColors:true,transparent:true,opacity:.8,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
+  const glowMaterial=new T.PointsMaterial({map:glowMap,size:.48,vertexColors:true,transparent:true,opacity:1,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
   group.add(new T.Points(glowGeometry,glowMaterial));
   const bulbColor=new T.Color('#ffe3a4');bulbs.material.color.set('#ffffff');bulbs.material.toneMapped=false;
 
@@ -255,8 +293,17 @@ export function makeChristmasTree(){
     else starShape.lineTo(Math.cos(angle)*radius,Math.sin(angle)*radius);
   }
   starShape.closePath();
-  const star=mesh(group,new T.ExtrudeGeometry(starShape,{depth:.07,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.025,bevelThickness:.025}),gold,[0,6.85,0]);
+  const starMaterial=new T.MeshStandardMaterial({color:'#f7d373',emissive:'#ffb743',emissiveIntensity:1.1,metalness:.65,roughness:.2});
+  const star=mesh(group,new T.ExtrudeGeometry(starShape,{depth:.07,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.025,bevelThickness:.025}),starMaterial,[0,6.85,0]);
   star.rotation.y=.5;
+  const starHalo=new T.Sprite(new T.SpriteMaterial({map:glowMap,color:'#ffd37a',transparent:true,opacity:.65,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));
+  starHalo.position.set(0,6.85,0);starHalo.scale.set(1.65,1.65,1);group.add(starHalo);
+  const sparkleMap=texture((ctx,size)=>{
+    ctx.clearRect(0,0,size,size);const c=size/2;
+    ctx.fillStyle='#fff6d2';ctx.beginPath();ctx.moveTo(c,0);ctx.lineTo(c+2,c-2);ctx.lineTo(size,c);ctx.lineTo(c+2,c+2);ctx.lineTo(c,size);ctx.lineTo(c-2,c+2);ctx.lineTo(0,c);ctx.lineTo(c-2,c-2);ctx.closePath();ctx.fill();
+  },64);
+  const starGlint=new T.Sprite(new T.SpriteMaterial({map:sparkleMap,color:'#fff5d4',transparent:true,opacity:.8,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));starGlint.position.copy(starHalo.position);starGlint.scale.set(.95,.95,1);group.add(starGlint);
+
   const light=new T.PointLight('#ffd18c',12,8,1.4);light.position.set(0,3,1);group.add(light);
   const wrapping=['#8b303e','#b49760','#254f45','#eee0ba'];
   for(let i=0;i<4;i++){
@@ -268,13 +315,18 @@ export function makeChristmasTree(){
   }
   return {group,bulbs,
     tick(seconds:number,reduced:boolean){
-      for(let i=0;i<100;i++){
-        const brightness=reduced?.8:.45+.45*(Math.sin(seconds*2.1+i*2.39996)*.5+.5)+.3*Math.pow(Math.max(0,Math.sin(seconds*3.3+i*1.7)),6);
+      for(let i=0;i<180;i++){
+        const brightness=reduced?1.1:.35+.8*(Math.sin(seconds*2.3+i*2.39996)*.5+.5)+2.2*Math.pow(Math.max(0,Math.sin(seconds*3.6+i*1.7)),10);
         bulbColor.set('#ffe3a4').multiplyScalar(brightness);bulbs.setColorAt(i,bulbColor);
         colors.set([bulbColor.r,bulbColor.g,bulbColor.b],i*3);
       }
       if(bulbs.instanceColor)bulbs.instanceColor.needsUpdate=true;
       glowGeometry.attributes.color.needsUpdate=true;
+      const starPulse=reduced?1:.8+.35*(Math.sin(seconds*2)*.5+.5);
+      starMaterial.emissiveIntensity=starPulse*1.4;starHalo.material.opacity=starPulse*.7;
+      starGlint.material.opacity=reduced?.6:.35+.65*Math.pow(Math.max(0,Math.sin(seconds*2.4)),4);
+      starGlint.material.rotation=reduced?0:Math.sin(seconds*.3)*.12;
+
     }
   };
 }
