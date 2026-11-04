@@ -78,11 +78,18 @@ const barilochePoints = {
   altar: { stop: new T.Vector3(0, 0, -10.7), view: new T.Vector3(0, 2.9, -16) },
   glass: { stop: new T.Vector3(6.3, 0, -5.6), view: new T.Vector3(8.65, 5.95, -7.8) },
 };
-const candleStop = new T.Vector3(-6.5, 0, 12.25);
+const candlePosition = new T.Vector3(2.45, 0, 13.25);
+const candleStop = new T.Vector3(1.45, 0, 13.25);
+const lighting = {
+  day: { sky: '#ffe8c9', sun: '#ffe2b4', hemisphere: 1.85, direct: 2.4, altar: 5 },
+  dusk: { sky: '#e6b28a', sun: '#ffad68', hemisphere: 1.2, direct: 1.6, altar: 12 },
+  night: { sky: '#a4b8e8', sun: '#939ed0', hemisphere: .76, direct: .55, altar: 16 },
+};
+export type LightPreset = keyof typeof lighting;
 
 function makeCandle() {
   const stand = new T.Group();
-  stand.position.set(-7.35, 0, 12.25);
+  stand.position.copy(candlePosition);
   const brass = new T.MeshStandardMaterial({ color: '#8b6239', metalness: .65, roughness: .36 });
   const wax = new T.MeshStandardMaterial({ color: '#efe1bc' });
   function add(geometry: T.BufferGeometry, material: T.Material, y: number) {
@@ -127,6 +134,20 @@ export class Walkthrough {
   private notice:(message:string)=>void;
   private observer:ResizeObserver;
   private view='welcome';
+  private hemisphere=new T.HemisphereLight('#ffe8c9','#615343');
+  private daylight=new T.DirectionalLight('#ffe2b4');
+  private altarLight=new T.PointLight('#ffc381',5,9,1.3);
+  private lightPreset:LightPreset='day';
+
+  setLighting(preset:LightPreset){
+    this.lightPreset=preset;
+    const settings=lighting[preset];
+    this.hemisphere.color.set(settings.sky);
+    this.hemisphere.intensity=settings.hemisphere;
+    this.daylight.color.set(settings.sun);
+    this.daylight.intensity=settings.direct;
+    this.altarLight.intensity=settings.altar;
+  }
   private candle?: ReturnType<typeof makeCandle>;
   private framing?: T.Vector3;
   private quiet=false;
@@ -166,8 +187,11 @@ export class Walkthrough {
     this.renderer.toneMappingExposure=1.18;
     this.scene.background=new T.Color('#201a15');
     this.scene.fog=new T.FogExp2('#30251c',.022);
-    const hemi=new T.HemisphereLight('#ffe8c9','#615343',1.85);this.scene.add(hemi);
-    const sun=new T.DirectionalLight('#ffe2b4',2.4);sun.position.set(-6,12,-11);this.scene.add(sun);
+    this.daylight.position.set(-6,12,-11);
+    this.altarLight.position.set(0,4.3,-13.7);
+    this.altarLight.visible=false;
+    this.scene.add(this.hemisphere,this.daylight,this.altarLight);
+    this.setLighting('day');
     const fill=new T.DirectionalLight('#a0bbd9',.65);fill.position.set(7,5,9);this.scene.add(fill,this.avatar.group,this.privateRoom);
     const canvas=this.renderer.domElement;
     host.append(canvas);
@@ -199,8 +223,10 @@ export class Walkthrough {
     this.candle=id==='bariloche'?makeCandle():undefined;
     if(this.candle){
       next.root.add(this.candle.stand);
-      next.blockers.push({x:-7.35,z:12.25,width:.56,depth:.56});
+      next.blockers.push({x:candlePosition.x,z:candlePosition.z,width:.56,depth:.56});
     }
+    this.setLighting('day');
+    this.altarLight.visible=!!this.candle;
     this.framing=undefined;
     this.quiet=false;
     this.position.copy(next.spawn);this.avatar.group.rotation.y=0;
@@ -208,7 +234,11 @@ export class Walkthrough {
     return true;
   }
   mode(view:string){
-    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points')this.framing=undefined;
+    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points'&&view!=='reflection')this.framing=undefined;
+    const preset=this.lightPreset;
+    this.setLighting(view==='room'?'day':preset);
+    this.lightPreset=preset;
+    this.altarLight.visible=!!this.candle&&view!=='room';
     this.view=view;this.avatar.group.visible=view==='walk';this.privateRoom.visible=view==='room';
     if(this.place)this.place.root.visible=view!=='room';
     this.clear();
@@ -323,7 +353,13 @@ export class Walkthrough {
       this.avatar.legs.forEach((leg,i)=>{leg.rotation.x=this.seated?-1.24:moved?Math.sin(now*.012+i*Math.PI)*.42:0;});
     }
     if(this.view==='welcome'){
-      this.camera.position.set(-2.25,2.65,16.9);this.camera.lookAt(2.5,3.55,-15);
+      if(this.candle){
+        this.camera.position.set(-1,2.45,18);
+        this.camera.lookAt(.1,2.6,-15);
+      }else{
+        this.camera.position.set(-2.25,2.65,16.9);
+        this.camera.lookAt(2.5,3.55,-15);
+      }
     }else if(this.view==='room'){
       this.camera.position.set(28.15,1.43,2.47);this.camera.lookAt(30.05,1.24,-2.2);
     }else if(this.framing){

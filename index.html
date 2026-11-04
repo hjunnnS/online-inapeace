@@ -3,11 +3,23 @@
 <body><main id="app">
 <div id="viewport" aria-label="성당 3D 장면"></div>
 <header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="audio-open" type="button">♪ 음성</button><button id="exit" type="button" hidden>나가기</button></div></header>
-<section id="welcome" class="welcome"><div class="entry"><p id="scene-index" class="eyebrow">CATHEDRALS · 01</p><h1 id="scene-name">바릴로체 대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
+<section id="welcome" class="welcome"><div class="entry"><p id="scene-index" class="eyebrow">CATHEDRALS · 01</p><h1 id="scene-name">바릴로체 대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><button id="enter-sound" type="button">성당 소리와 함께 들어가기</button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
 <div id="notice" class="notice" role="status" hidden></div>
 <button id="retry" class="retry" type="button" hidden>다시 불러오기</button>
-<footer id="controls" hidden><span>WASD / 방향키 · 바닥 클릭으로 이동<br>드래그로 둘러보기 · 휠로 확대/축소</span><div><button id="points-open" type="button" hidden>관람 지점</button><button id="candle" type="button" hidden>촛불 켜기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">고해소로 걷기</button></div></footer>
+<footer id="controls" hidden><span>WASD / 방향키 · 바닥 클릭으로 이동<br>드래그로 둘러보기 · 휠로 확대/축소</span><div><button id="reflection-open" type="button" hidden>조명 · 묵주</button><button id="points-open" type="button" hidden>관람 지점</button><button id="candle" type="button" hidden>촛불 켜기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">고해소로 걷기</button></div></footer>
 <button id="quiet-exit" type="button" hidden>조작 버튼 다시 보기 <span aria-hidden="true">· Esc</span></button>
+<dialog id="reflection" aria-labelledby="reflection-title">
+  <div class="panel-head"><h2 id="reflection-title">조명과 묵주</h2><button id="reflection-close" type="button" aria-label="조명과 묵주 닫기">✕</button></div>
+  <label for="light-preset">본당 조명</label>
+  <select id="light-preset"><option value="day">낮 · 기본</option><option value="dusk">해질녘</option><option value="night">밤</option></select>
+  <section class="rosary" aria-labelledby="rosary-title">
+    <h3 id="rosary-title">묵주 한 알씩 넘기기</h3>
+    <p>가톨릭에서 묵주는 기도의 순서를 따라가는 데 쓰입니다. 원한다면 한 알씩 넘기며 잠시 머물러 보세요.</p>
+    <div id="beads" class="beads" aria-hidden="true"></div>
+    <p id="bead-status" role="status">아직 넘긴 알이 없습니다.</p>
+    <div class="dialog-actions"><button id="bead-next" type="button">한 알 넘기기</button><button id="bead-reset" type="button">처음으로</button></div>
+  </section>
+</dialog>
 <dialog id="points" aria-labelledby="points-title">
   <div class="panel-head"><h2 id="points-title">바릴로체 관람 지점</h2><button id="points-close" type="button" aria-label="관람 지점 닫기">✕</button></div>
   <p>지점을 고르면 가까이 걸어가 그곳을 바라봅니다.</p>
@@ -21,5 +33,10 @@
 <dialog id="audio-panel"><div class="panel-head"><div><p class="eyebrow">LISTEN</p><h2>잠시 듣기</h2></div><button id="audio-close" type="button" aria-label="음성 설정 닫기">✕</button></div>
 <label for="phrase">전례 문구</label><select id="phrase"></select><p id="translation"></p><p id="audio-status" role="status">정지</p><progress id="progress" max="1" value="0" aria-label="재생 위치"></progress><div class="dialog-actions"><button id="play" type="button" class="primary">재생</button><button id="stop" type="button">정지</button></div>
 <label><input id="repeat" type="checkbox"> 반복 재생</label><label>반복 간격 <select id="gap"><option value="3">3초</option><option value="8">8초</option><option value="15">15초</option></select></label>
-<label>음성 음량 <input id="voice-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label>공간 소리 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">전례 문구를 발췌한 시제품 낭독입니다.</p></dialog>
+<label>음성 음량 <input id="voice-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label for="background-track">배경 소리</label>
+<select id="background-track"><option value="room">조용한 본당</option><option value="organ">본당의 여운 · 오르간풍 연주</option></select>
+<p id="background-info" class="fine"></p>
+<p id="background-status" class="fine" role="status">배경 소리 꺼짐</p>
+<button id="background-toggle" type="button">배경 소리 켜기</button>
+<label>배경 음량 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">전례 문구를 발췌한 시제품 낭독입니다.</p></dialog>
 </main><script type="module" src="/src/main.ts"></script></body></html>

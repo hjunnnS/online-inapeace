@@ -7,3 +7,11 @@
 .point-list{display:grid;gap:.6rem}
 .point-list button{text-align:left}
 .point-list small{line-height:1.5;letter-spacing:0}
+#enter-sound{margin:.5rem 0 0}
+#reflection{max-height:88dvh;overflow:auto}
+.rosary{margin-top:1.25rem;border-top:1px solid var(--line)}
+.beads{display:flex;align-items:center;justify-content:space-between;gap:.25rem;padding:.65rem .2rem}
+.beads span{width:.75rem;aspect-ratio:1;border:1px solid #b9a17c;border-radius:50%;background:#403329}
+.beads span.current{background:var(--gold);outline:2px solid #e9bd73;outline-offset:3px}
+#bead-status{font-size:.85rem;color:var(--gold)}
+#scene-name{word-break:keep-all;max-width:13ch}

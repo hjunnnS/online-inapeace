@@ -1,10 +1,11 @@
 import './style.css';
-import { Walkthrough, type SceneId } from './scene';
+import { Walkthrough, type LightPreset, type SceneId } from './scene';
 import phrases from './phrases.json';
 import cathedrals from './cathedrals.json';
 
 function element<T extends HTMLElement>(id:string){const result=document.getElementById(id);if(!result)throw new Error('Missing element '+id);return result as T;}
 const viewport=element('viewport'), welcome=element('welcome'), controls=element('controls');
+const enterSound=element<HTMLButtonElement>('enter-sound');
 const enter=element<HTMLButtonElement>('enter'), exit=element<HTMLButtonElement>('exit'), sit=element<HTMLButtonElement>('sit'), door=element<HTMLButtonElement>('confess');
 const header=element('header'), pointsOpen=element('points-open'), candle=element('candle');
 const quiet=element('quiet'), quietExit=element('quiet-exit'), points=element<HTMLDialogElement>('points');
@@ -15,6 +16,16 @@ const panel=element<HTMLDialogElement>('audio-panel'), select=element<HTMLSelect
 const play=element<HTMLButtonElement>('play'), stop=element<HTMLButtonElement>('stop'), repeat=element<HTMLInputElement>('repeat'), gap=element<HTMLSelectElement>('gap');
 const progress=element<HTMLProgressElement>('progress'), audioStatus=element('audio-status'), translation=element('translation');
 const voiceVolume=element<HTMLInputElement>('voice-volume'), ambientVolume=element<HTMLInputElement>('ambient-volume');
+const backgroundTrack=element<HTMLSelectElement>('background-track');
+const backgroundToggle=element<HTMLButtonElement>('background-toggle');
+const backgroundInfo=element('background-info'), backgroundStatus=element('background-status');
+const reflectionOpen=element('reflection-open'), reflection=element<HTMLDialogElement>('reflection');
+const lightPreset=element<HTMLSelectElement>('light-preset'), beadStatus=element('bead-status');
+const beadNext=element<HTMLButtonElement>('bead-next');
+const beads=Array.from({length:10},()=>document.createElement('span'));
+element('beads').append(...beads);
+let beadIndex=0, backgroundOn=false, backgroundVersion=0;
+let backgroundFile='room.wav';
 const voice=new Audio(), ambient=new Audio(new URL('audio/room.wav',location.href).href);
 voice.preload='none';ambient.preload='none';ambient.loop=true;
 voice.volume=Number(voiceVolume.value);ambient.volume=0;
@@ -84,36 +95,68 @@ async function startVoice(resume=false){
   if(!resume){
     voice.src=new URL('audio/'+current().id+'.wav',location.href).href;
   }
-  audioState='loading';updateAudio();
+  audioState='loading';syncBackground();updateAudio();
   try{await voice.play();if(version!==playVersion)return;audioState='playing';}
   catch{if(version!==playVersion)return;audioState='error';audioProblem='음성을 불러오지 못했습니다. 다시 재생해 주세요.';}
-  updateAudio();
+  updateAudio();syncBackground();
 }
 voice.addEventListener('ended',()=>{
   if(audioState!=='playing')return;
-  if(!repeat.checked){resetVoice();return;}
+  if(!repeat.checked){resetVoice();syncBackground();return;}
   audioState='waiting';deadline=performance.now()+Number(gap.value)*1000;
-  waiting=window.setTimeout(()=>{if(!document.hidden&&repeat.checked)void startVoice();else resetVoice();},Number(gap.value)*1000);
+  waiting=window.setTimeout(()=>{if(!document.hidden&&repeat.checked)void startVoice();else {resetVoice();syncBackground();}},Number(gap.value)*1000);
   updateAudio();
 });
 voice.addEventListener('timeupdate',updateAudio);
 window.setInterval(()=>{if(audioState==='waiting')updateAudio();},250);
-play.onclick=()=>{if(audioState==='playing')pauseVoice();else void startVoice(audioState==='paused');};
-stop.onclick=resetVoice;
-select.onchange=resetVoice;
-repeat.onchange=()=>{if(!repeat.checked&&audioState==='waiting')resetVoice();};
-gap.onchange=()=>{if(audioState==='waiting')resetVoice();};
+play.onclick=()=>{if(audioState==='playing'){pauseVoice();syncBackground();}else void startVoice(audioState==='paused');};
+stop.onclick=select.onchange=()=>{resetVoice();syncBackground();};
+repeat.onchange=()=>{if(!repeat.checked&&audioState==='waiting'){resetVoice();syncBackground();}};
+gap.onchange=()=>{if(audioState==='waiting'){resetVoice();syncBackground();}};
 voiceVolume.oninput=()=>{voice.volume=Number(voiceVolume.value);};
-ambientVolume.oninput=()=>{
+function syncBackground(){
+  const version=++backgroundVersion;
+  backgroundToggle.textContent=backgroundOn?'배경 소리 끄기':'배경 소리 켜기';
   ambient.volume=Number(ambientVolume.value);
-  if(ambient.volume>0&&!document.hidden)void ambient.play().catch(()=>announce('공간 소리를 재생하지 못했습니다.'));
-  else ambient.pause();
+  const organ=backgroundTrack.value==='organ';
+  backgroundInfo.textContent=organ?'본당의 여운 · 1분 20초 · 이 시제품을 위해 제작한 합성 오르간 연주':'조용한 본당 · 반복 재생 · 시제품 공간음';
+  const file=organ?'organ.mp3':'room.wav';
+  if(file!==backgroundFile){
+    backgroundFile=file;
+    ambient.src=new URL('audio/'+file,location.href).href;
+  }
+  ambient.loop=!organ;
+  const voiceBusy=audioState==='loading'||audioState==='playing'||audioState==='waiting';
+  if(!backgroundOn||!ambient.volume||document.hidden||confessional.open||opening||voiceBusy){
+    ambient.pause();
+    backgroundStatus.textContent=backgroundOn&&voiceBusy?'전례 음성 재생 중에는 배경 소리를 쉽니다.':'배경 소리 꺼짐';
+    return;
+  }
+  void ambient.play().then(()=>{
+    if(version===backgroundVersion)backgroundStatus.textContent='배경 소리 재생 중';
+  }).catch(()=>{
+    if(version!==backgroundVersion)return;
+    backgroundOn=false;
+    syncBackground();
+    announce('배경 소리를 재생하지 못했습니다. 음성 메뉴에서 다시 켜 주세요.');
+  });
+}
+backgroundTrack.onchange=syncBackground;
+backgroundToggle.onclick=()=>{
+  backgroundOn=!backgroundOn;
+  if(backgroundOn&&Number(ambientVolume.value)===0)ambientVolume.value='0.3';
+  syncBackground();
 };
+ambientVolume.oninput=()=>{
+  backgroundOn=Number(ambientVolume.value)>0;
+  syncBackground();
+};
+ambient.onended=()=>{backgroundOn=false;syncBackground();};
 element('audio-open').onclick=()=>{scene?.mode('audio');panel.showModal();};
 element('audio-close').onclick=()=>panel.close();
 panel.onclose=()=>{scene?.mode(active?'walk':'welcome');};
-document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseVoice();ambient.pause();}});
-window.addEventListener('pagehide',()=>{thought.value='';resetVoice();ambient.pause();if(confessional.open)confessional.close();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseVoice();syncBackground();});
+window.addEventListener('pagehide',()=>{thought.value='';resetVoice();backgroundOn=false;syncBackground();if(confessional.open)confessional.close();});
 window.addEventListener('pageshow',()=>{thought.value='';if(confessional.open)confessional.close();});
 
 function announce(message:string,duration=3000){
@@ -122,7 +165,7 @@ function announce(message:string,duration=3000){
 }
 function enterRoom(){
   if(confessional.open||!active)return;
-  resetVoice();ambient.pause();scene?.mode('room');thought.value='';confessional.showModal();thought.focus();
+  resetVoice();scene?.mode('room');thought.value='';confessional.showModal();syncBackground();thought.focus();
 }
 function leaveRoom(){
   thought.value='';
@@ -131,12 +174,13 @@ function leaveRoom(){
 element('release').onclick=leaveRoom;
 element('cancel').onclick=leaveRoom;
 confessional.oncancel=(event)=>{event.preventDefault();leaveRoom();};
-confessional.onclose=()=>{thought.value='';scene?.mode('walk');door.focus();announce('본당으로 돌아왔습니다.');};
+confessional.onclose=()=>{thought.value='';scene?.mode('walk');door.focus();syncBackground();announce('본당으로 돌아왔습니다.');};
 sit.onclick=()=>scene?.sit();
 door.onclick=()=>{announce('고해소 쪽으로 이동합니다.');scene?.walkToDoor(enterRoom);};
 function updateWalkControls(){
   const local=active&&selected==='bariloche';
   pointsOpen.hidden=!local;
+  reflectionOpen.hidden=!local;
   candle.hidden=!local;
   candle.textContent=scene?.candleLit?'촛불 끄기':'촛불 켜기';
   quiet.hidden=!local||!scene?.seated;
@@ -166,6 +210,17 @@ points.onclose=()=>{
   nextPoint=undefined;
   pointsOpen.focus();
 };
+function updateBeads(){
+  beads.forEach((bead,index)=>bead.classList.toggle('current',index+1===beadIndex));
+  beadStatus.textContent=beadIndex?beadIndex+'번째 알 · 10알':'아직 넘긴 알이 없습니다.';
+  beadNext.textContent=beadIndex===beads.length?'처음부터 한 알 넘기기':'한 알 넘기기';
+}
+beadNext.onclick=()=>{beadIndex=beadIndex%beads.length+1;updateBeads();};
+element('bead-reset').onclick=()=>{beadIndex=0;updateBeads();};
+lightPreset.onchange=()=>scene?.setLighting(lightPreset.value as LightPreset);
+reflectionOpen.onclick=()=>{scene?.mode('reflection');reflection.showModal();};
+element('reflection-close').onclick=()=>reflection.close();
+reflection.onclose=()=>{scene?.mode('walk');reflectionOpen.focus();};
 function present(walk:boolean){
   active=walk;welcome.hidden=walk;controls.hidden=!walk;exit.hidden=!walk;scene?.mode(walk?'walk':'welcome');
   if(quietView)setQuiet(false);
@@ -174,11 +229,13 @@ function present(walk:boolean){
 async function switchScene(id:SceneId,walk:boolean,url?:string){
   if(opening)return;
   if(!scene){announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);return;}
-  opening=true;retry.hidden=true;enter.disabled=true;
+  opening=true;retry.hidden=true;enter.disabled=enterSound.disabled=true;
   resetVoice();ambient.pause();scene.mode('loading');announce('공간을 불러오는 중…',0);
   try{
     if(await scene.load(id,url)){
-      selected=id;loaded=true;refreshSceneTitle();present(walk);
+      selected=id;loaded=true;refreshSceneTitle();
+      lightPreset.value='day';beadIndex=0;updateBeads();
+      present(walk);
       notice.hidden=true;
       if(walk)announce((cathedrals.find(item=>item.id===id)?.name??'전환 검증용 임시 공간')+'에 들어왔습니다.');
     }
@@ -186,25 +243,38 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
     present(active);retryWalk=walk;
     announce('공간을 불러오지 못했습니다. 연결 상태를 확인해 주세요.',0);retry.hidden=false;
     retry.onclick=()=>void switchScene(id,retryWalk);
-  }finally{opening=false;enter.disabled=false;}
+  }finally{opening=false;enter.disabled=enterSound.disabled=false;if(active)syncBackground();}
 }
 try{scene=new Walkthrough(viewport,announce);}
 catch{announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);}
-enter.onclick=()=>{
+function enterCathedral(withSound:boolean){
+  resetVoice();
+  backgroundOn=withSound;
+  if(withSound){
+    backgroundTrack.value='organ';
+    if(!Number(ambientVolume.value))ambientVolume.value='0.3';
+    if(ambient.ended)ambient.currentTime=0;
+  }
   if(!loaded){void switchScene(selected,true);return;}
-  resetVoice();ambient.pause();present(true);announce((cathedrals.find(item=>item.id===selected)?.name??'성당')+'에 들어왔습니다.');sit.focus();
-};
-exit.onclick=()=>{resetVoice();ambient.pause();present(false);enter.focus();};
+  present(true);
+  syncBackground();
+  announce((cathedrals.find(item=>item.id===selected)?.name??'성당')+'에 들어왔습니다.');
+  sit.focus();
+}
+enter.onclick=()=>enterCathedral(false);
+enterSound.onclick=()=>enterCathedral(true);
+exit.onclick=()=>{resetVoice();backgroundOn=false;syncBackground();present(false);enter.focus();};
 window.setInterval(updateWalkControls,150);
 refreshSceneTitle();
 if(scene)void switchScene('bariloche',false);
 updateAudio();
+syncBackground();
 
 if(qa){
   Object.assign(window,{
     inapeaceQA:{
       switchScene,
-      status:()=>({scene:selected,position:scene?.position.toArray(),seated:scene?.seated,active,loaded,opening,audioState,room:confessional.open,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,triangles:scene?.triangleCount})
+      status:()=>({scene:selected,position:scene?.position.toArray(),seated:scene?.seated,active,loaded,opening,audioState,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,room:confessional.open,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,triangles:scene?.triangleCount})
     }
   });
 }
