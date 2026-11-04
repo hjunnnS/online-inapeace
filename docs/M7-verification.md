@@ -28,3 +28,7 @@ Rolling frame intervals in the tested paths were about 8.3–10.5 ms in Chromium
 The original synthesized choir MP3 decodes to 66 seconds; measured peak is -12.3 dBFS. Playback, duration, controls and overlap behavior were verified. The listening quality of synthetic voices, desired sacred atmosphere and resemblance to the reference still need human acceptance. No physical headphone/speaker listening approval is claimed. Existing Latin pronunciation review (#22) also remains separate.
 
 The implementation and automated/functional checks are complete. Human sound/atmosphere acceptance is recorded as pending, rather than being marked passed.
+
+## Background audio entry follow-up
+
+The default entry button previously entered silently, and the organ background stopped after 80 seconds. Default entry now starts the background directly from the user click. A separate silent-entry button remains available. The organ is looped, its asset gain was raised by 8 dB, and the initial chosen background volume is 0.5. A top-bar toggle makes the background state visible and allows immediate muting/retry. Chromium confirmed normal entry playback, the loop flag, the volume, top-bar toggles, and pause/resume around liturgical speech.

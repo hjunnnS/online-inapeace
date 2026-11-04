@@ -22,6 +22,7 @@ const progress=element<HTMLProgressElement>('progress'), audioStatus=element('au
 const voiceVolume=element<HTMLInputElement>('voice-volume'), ambientVolume=element<HTMLInputElement>('ambient-volume');
 const backgroundTrack=element<HTMLSelectElement>('background-track');
 const backgroundToggle=element<HTMLButtonElement>('background-toggle');
+const backgroundQuick=element<HTMLButtonElement>('background-quick');
 const backgroundInfo=element('background-info'), backgroundStatus=element('background-status');
 const reflectionOpen=element('reflection-open'), reflection=element<HTMLDialogElement>('reflection');
 const lightPreset=element<HTMLSelectElement>('light-preset'), beadStatus=element('bead-status');
@@ -93,7 +94,7 @@ function stopChoir(){
 function exitGame(){stopChoir();syncBackground();choirOpen.focus();}
 async function playChoir(conduct:boolean){
   stopChoir();resetVoice();
-  if(!Number(ambientVolume.value))ambientVolume.value='0.3';
+  if(!Number(ambientVolume.value))ambientVolume.value='0.5';
   const version=++choirVersion;
   choirOn=true;scene?.setChoirPlaying(true);syncBackground();
   choirStatus.textContent='공연을 불러오는 중…';
@@ -280,15 +281,17 @@ voiceVolume.oninput=()=>{voice.volume=Number(voiceVolume.value);};
 function syncBackground(){
   const version=++backgroundVersion;
   backgroundToggle.textContent=backgroundOn?'배경 소리 끄기':'배경 소리 켜기';
+  backgroundQuick.textContent=backgroundOn?'♪ 배경음 끄기':'♪ 배경음 켜기';
+  backgroundQuick.setAttribute('aria-pressed',String(backgroundOn));
   ambient.volume=Number(ambientVolume.value);
   const organ=backgroundTrack.value==='organ';
-  backgroundInfo.textContent=organ?'본당의 여운 · 1분 20초 · 이 시제품을 위해 제작한 합성 오르간 연주':'조용한 본당 · 반복 재생 · 시제품 공간음';
+  backgroundInfo.textContent=organ?'본당의 여운 · 1분 20초 · 반복 재생 · 이 시제품을 위해 제작한 합성 오르간 연주':'조용한 본당 · 반복 재생 · 시제품 공간음';
   const file=organ?'organ.mp3':'room.wav';
   if(file!==backgroundFile){
     backgroundFile=file;
     ambient.src=new URL('audio/'+file,location.href).href;
   }
-  ambient.loop=!organ;
+  ambient.loop=true;
   const voiceBusy=audioState==='loading'||audioState==='playing'||audioState==='waiting';
   if(!backgroundOn||!ambient.volume||document.hidden||confessional.open||releasing||opening||voiceBusy||choirOn){
     ambient.pause();
@@ -305,16 +308,16 @@ function syncBackground(){
   });
 }
 backgroundTrack.onchange=syncBackground;
-backgroundToggle.onclick=()=>{
+backgroundQuick.onclick=backgroundToggle.onclick=()=>{
   backgroundOn=!backgroundOn;
-  if(backgroundOn&&Number(ambientVolume.value)===0)ambientVolume.value='0.3';
+  if(backgroundOn&&Number(ambientVolume.value)===0)ambientVolume.value='0.5';
   syncBackground();
 };
 ambientVolume.oninput=()=>{
   backgroundOn=Number(ambientVolume.value)>0;
   syncBackground();
 };
-ambient.onended=()=>{backgroundOn=false;syncBackground();};
+ambient.onerror=()=>{if(backgroundOn){backgroundOn=false;syncBackground();announce('배경 소리를 불러오지 못했습니다. 배경음 켜기를 눌러 다시 시도해 주세요.');}};
 element('audio-open').onclick=()=>{scene?.mode('audio');panel.showModal();};
 element('audio-close').onclick=()=>panel.close();
 panel.onclose=()=>{scene?.mode(active?'walk':'welcome');};
@@ -359,6 +362,7 @@ door.onclick=()=>{announce('고해소 쪽으로 이동합니다.');scene?.walkTo
 function updateWalkControls(){
   const local=active&&selected==='bariloche';
   element('background-note').hidden=!local;
+  backgroundQuick.hidden=!active;
   pointsOpen.hidden=!local;
   reflectionOpen.hidden=!local;choirOpen.hidden=!local;photoOpen.hidden=!local;
   veil.hidden=!local;
@@ -367,7 +371,7 @@ function updateWalkControls(){
   candle.toggleAttribute('disabled',!!scene?.effect);
   if(qa){
     const status=element('qa-status');status.hidden=false;
-    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,audioState,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,room:confessional.open});
+    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,audioState,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
   }
   const locations=scene?.hotspots()??[];
   for(const button of hotspots.querySelectorAll<HTMLButtonElement>('button'))button.hidden=true;
@@ -459,7 +463,7 @@ function enterCathedral(withSound:boolean){
   backgroundOn=withSound;effectVolume.value=withSound?'0.25':'0';
   if(withSound){
     backgroundTrack.value='organ';
-    if(!Number(ambientVolume.value))ambientVolume.value='0.3';
+    if(!Number(ambientVolume.value))ambientVolume.value='0.5';
     if(ambient.ended)ambient.currentTime=0;
   }
   if(!loaded){void switchScene(selected,true);return;}
@@ -468,8 +472,8 @@ function enterCathedral(withSound:boolean){
   announce((cathedrals.find(item=>item.id===selected)?.name??'성당')+'에 들어왔습니다.');
   sit.focus();
 }
-enter.onclick=()=>enterCathedral(false);
-enterSound.onclick=()=>enterCathedral(true);
+enter.onclick=()=>enterCathedral(true);
+enterSound.onclick=()=>enterCathedral(false);
 exit.onclick=()=>{stopChoir();stopActionSounds();resetVoice();backgroundOn=false;syncBackground();present(false);enter.focus();};
 window.setInterval(updateWalkControls,150);
 refreshSceneTitle();
