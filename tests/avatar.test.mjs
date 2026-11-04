@@ -33,7 +33,7 @@ test('sitting blends gradually instead of shrinking or instantly changing the bo
  disposeObject(avatar.group);
 });
 
-test('prayer hands meet in front of the chest and closed eyes restore on standing',()=>{
+test('prayer hands meet in front of the chest and eyes restore when prayer ends',()=>{
  for(let pattern=0;pattern<5;pattern++){
   const avatar=makeAvatar('#506878',pattern,pattern);avatar.praying=true;
   animateAvatar(avatar,true,0,0,1,true);avatar.group.updateMatrixWorld(true);
@@ -44,9 +44,18 @@ test('prayer hands meet in front of the chest and closed eyes restore on standin
   assert.ok(left.y>chest.y+.22,'hands are raised above the lap');
   assert.equal(avatar.eyesOpen.visible,false);assert.equal(avatar.eyesClosed.visible,true);
   assert.equal(avatar.prayerHands.visible,true);
-  animateAvatar(avatar,false,0,0,1,true);
+  avatar.praying=false;animateAvatar(avatar,false,0,0,1,true);
   assert.equal(avatar.eyesOpen.visible,true);assert.equal(avatar.eyesClosed.visible,false);assert.equal(avatar.prayerHands.visible,false);
   assert.equal(avatar.arms[0].rotation.y,0);
   disposeObject(avatar.group);
+ }
+});
+
+test('all five bodies can pray standing with joined hands and eyes closed, without bending knees',()=>{
+ for(let pattern=0;pattern<5;pattern++){
+  const avatar=makeAvatar('#506878',pattern);avatar.praying=true;animateAvatar(avatar,false,0,0,1,true);avatar.group.updateMatrixWorld(true);
+  assert.equal(avatar.eyesClosed.visible,true);assert.equal(avatar.prayerHands.visible,true);assert.ok(Math.abs(avatar.knees[0].rotation.x)<.01);
+  const hands=avatar.hands.map(hand=>hand.getWorldPosition(new T.Vector3()));assert.ok(hands[0].distanceTo(hands[1])<.065);
+  animateAvatar(avatar,false,2,1,.1);assert.equal(avatar.eyesClosed.visible,false,'walking restores sight');disposeObject(avatar.group);
  }
 });

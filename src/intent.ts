@@ -3,18 +3,27 @@ const temporaryViews=new Set(['walk','audio','catalog','points','reflection','ph
 export class NavigationIntent<T>{
   path:T[]=[];
   arrival?:()=>void;
+  label='';
+  totalDistance=0;
   transition(view:string){if(!temporaryViews.has(view))this.cancel();}
-  cancel(){this.path=[];this.arrival=undefined;}
-  complete(){const done=this.arrival;this.arrival=undefined;done?.();}
+  cancel(){this.path=[];this.arrival=undefined;this.label='';this.totalDistance=0;}
+  complete(){const done=this.arrival;this.cancel();done?.();}
 }
 export type PrayerStage='candle'|'seat'|'prayer'|'complete';
 export class PrayerJourney{
   stage:PrayerStage='candle';
   elapsed=0;
   paused=false;
+  standing=false;
   duration:number;
   constructor(duration=60){this.duration=duration;}
   next(){if(this.stage==='candle')this.stage='seat';else if(this.stage==='seat')this.stage='prayer';else if(this.stage==='prayer')this.stage='complete';}
+  skipSeat(){this.standing=true;this.stage='prayer';}
   tick(delta:number,visible:boolean){if(this.stage!=='prayer'||this.paused||!visible)return;this.elapsed=Math.min(this.duration,this.elapsed+Math.max(0,Math.min(delta,1)));if(this.elapsed>=this.duration)this.next();}
   get remaining(){return Math.ceil(this.duration-this.elapsed);}
+}
+
+/** Hiding controls for quiet viewing does not stop a prayer. Menus/background do. */
+export function prayerCanAdvance(state:{active:boolean;hidden:boolean;modal:boolean;releasing:boolean;game:boolean}){
+  return state.active&&!state.hidden&&!state.modal&&!state.releasing&&!state.game;
 }

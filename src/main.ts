@@ -1,6 +1,6 @@
 import './style.css';
 import { readPreferences, writePreferences, type Preferences } from './preferences';
-import { PrayerJourney } from './intent';
+import { PrayerJourney, prayerCanAdvance } from './intent';
 import { RhythmSession, directions, songDuration, type Direction } from './rhythm';
 import { Walkthrough, type LightPreset, type SceneId } from './scene';
 import carols from './carols.json';
@@ -350,6 +350,7 @@ confessional.onclose=()=>{
 veil.onclick=()=>scene?.toggleVeil();
 reducedMotion.onchange=()=>{scene?.setReducedMotion(reducedMotion.checked);document.body.classList.toggle('reduce-motion',reducedMotion.checked);preferences.reduced=reducedMotion.checked;saveSettings();};
 sit.onclick=()=>scene?.sit();
+element('walk-cancel').onclick=()=>{scene?.cancelWalk();announce('이동을 취소했습니다.');};
 door.onclick=()=>{announce('고해소 쪽으로 이동합니다.');scene?.walkToDoor(enterRoom);};
 function updateWalkControls(){
   const local=active,bariloche=selected==='bariloche';
@@ -359,14 +360,20 @@ function updateWalkControls(){
   reflectionOpen.hidden=!local;choirOpen.hidden=!local||!bariloche;photoOpen.hidden=!local;
   element('liturgy-open').hidden=!bariloche;
   element('point-tree').hidden=!bariloche;
-  element('experience-scope').textContent=bariloche?'촛불과 기도, 성가대와 집전 장면을 천천히 만나보세요.':'공통 기도 체험을 위한 간략 재구성 공간입니다. 성가대·집전 장면·트리는 바릴로체 전용입니다.';
+  element('experience-scope').textContent=bariloche?'촛불과 기도, 성가대와 집전 장면을 천천히 만나보세요.':'공간 특징: '+(cathedrals.find(item=>item.id===selected)?.detail??'성당 본당')+'. 공식 자료를 참고한 부분 재구성입니다. 성가대·집전 장면·트리는 바릴로체 전용입니다.';
   veil.hidden=!local;
   veil.textContent=scene?.veilOn?'미사포 벗기':'미사포 쓰기';
   veil.disabled=!!scene?.effect;
   candle.toggleAttribute('disabled',!!scene?.effect);
   if(qa){
     const status=element('qa-status');status.hidden=false;
-    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,navigating:scene?.navigating,playerPraying:scene?.playerPraying,prayerStage:journey?.stage,prayerRemaining:journey?.remaining,liturgy:liturgyElapsed,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,totalVisitors:scene?.totalVisitorCount,characterPatterns:scene?.characterPatterns,hairPatterns:scene?.hairPatterns,prayer:scene?.prayerCounts,playerSeatPose:scene?.playerSeatPose,movingVisitors:scene?.movingVisitorStatus,veiledWorshippers:scene?.veiledWorshipperCount,wallCandles:scene?.wallCandleCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
+    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,navigating:scene?.navigating,playerPraying:scene?.playerPraying,navigation:scene?.navigationStatus,prayerStanding:journey?.standing,prayerStage:journey?.stage,prayerRemaining:journey?.remaining,liturgy:liturgyElapsed,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,totalVisitors:scene?.totalVisitorCount,characterPatterns:scene?.characterPatterns,hairPatterns:scene?.hairPatterns,prayer:scene?.prayerCounts,playerSeatPose:scene?.playerSeatPose,movingVisitors:scene?.movingVisitorStatus,veiledWorshippers:scene?.veiledWorshipperCount,wallCandles:scene?.wallCandleCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
+  }
+  const walking=scene?.navigationStatus;
+  element('walk-status').hidden=!active||!walking||quietView||releasing;
+  if(walking){
+    element('walk-destination').textContent=walking.label+' · '+(walking.paused?'메뉴를 닫으면 이어갑니다':'약 '+walking.seconds+'초 남음');
+    element<HTMLProgressElement>('walk-progress').value=walking.progress;
   }
   const locations=scene?.hotspots()??[];
   for(const button of hotspots.querySelectorAll<HTMLButtonElement>('button'))button.hidden=true;
@@ -386,7 +393,7 @@ function updateWalkControls(){
   }
   candle.hidden=!local;
   candle.textContent=scene?.holdingCandle?'촛불 놓기':'촛불 켜기';
-  quiet.hidden=!local||!scene?.seated;
+  quiet.hidden=!local||(!scene?.seated&&!scene?.playerPraying);
   sit.textContent=scene?.seated?'일어나기':'앉기';
 }
 function setQuiet(on:boolean){
@@ -394,9 +401,9 @@ function setQuiet(on:boolean){
   scene?.setQuiet(on);
   header.hidden=on;controls.hidden=on||!active;quietExit.hidden=!on;
   if(on){notice.hidden=true;quietExit.focus();}
-  else quiet.focus();
+  else{quiet.focus();if(journey?.stage==='complete')announce('기도 시간이 끝났습니다. 고요히 마무리해 주세요.');}
 }
-quiet.onclick=()=>{if(active&&scene?.seated)setQuiet(true);};
+quiet.onclick=()=>{if(active&&(scene?.seated||scene?.playerPraying))setQuiet(true);};
 quietExit.onclick=()=>setQuiet(false);
 window.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&scene?.effect){event.preventDefault();scene.skipEffect();}
@@ -405,6 +412,8 @@ window.addEventListener('keydown',event=>{
 candle.onclick=()=>scene?.toggleCandle(updateWalkControls);
 pointsOpen.onclick=()=>{scene?.mode('points');points.showModal();};
 element('points-close').onclick=()=>points.close();
+let nextFeature=false;
+element('point-feature').onclick=()=>{nextFeature=true;points.close();};
 let nextPoint:'altar'|'glass'|'tree'|'entrance'|undefined;
 element('point-altar').onclick=()=>{nextPoint='altar';points.close();};
 element('point-glass').onclick=()=>{nextPoint='glass';points.close();};
@@ -412,8 +421,8 @@ element('point-entrance').onclick=()=>{nextPoint='entrance';points.close();};
 element('point-tree').onclick=()=>{nextPoint='tree';points.close();};
 points.onclose=()=>{
   scene?.mode('walk');
-  if(nextPoint)scene?.visit(nextPoint);
-  nextPoint=undefined;
+  if(nextFeature)scene?.visitFeature();else if(nextPoint)scene?.visit(nextPoint);
+  nextPoint=undefined;nextFeature=false;
   pointsOpen.focus();
 };
 function updateBeads(){
@@ -482,6 +491,7 @@ function renderPrayer(){
   const action=element<HTMLButtonElement>('prayer-action');action.textContent={candle:scene?.holdingCandle?'촛불 놓고 다음으로':'촛불 켜러 가기',seat:scene?.seated?'기도 시작':'빈자리에 앉기',prayer:'기도 마치기',complete:'본당으로 돌아가기'}[stage];action.disabled=journeyBusy||writingInJourney;
   if(writingInJourney)element('prayer-copy').textContent='마음을 털어놓는 방으로 걸어갑니다. 중단하려면 기도 그만하기를 눌러주세요.';
   if(journeyBusy)action.textContent=scene?.effect?'잠시 불빛을 담는 중…':'자리로 걸어가는 중…';
+  element('prayer-skip').textContent=stage==='seat'?'앉지 않고 여기서 기도':'촛불 단계 건너뛰기';
   element('prayer-skip').hidden=writingInJourney||stage==='complete'||stage==='prayer';
   element('prayer-pause').hidden=stage!=='prayer';element('prayer-pause').textContent=journey.paused?'이어서 기도하기':'잠시 멈추기';
   element('prayer-write').hidden=writingInJourney||stage==='complete';element('prayer-end').hidden=stage==='complete';
@@ -498,11 +508,11 @@ element('prayer-action').onclick=()=>{
   }else if(journey.stage==='prayer'){journey.next();scene.setPlayerPraying(false);renderPrayer();}
   else endPrayer();
 };
-element('prayer-skip').onclick=()=>{if(!journey)return;scene?.cancelWalk();journeyBusy=false;if(journey.stage==='seat'){if(scene?.seated)beginPrayerPose();else{scene?.sit();journeyBusy=!!scene?.navigating;}}else journey.next();renderPrayer();};
+element('prayer-skip').onclick=()=>{if(!journey)return;scene?.cancelWalk();journeyBusy=false;if(journey.stage==='seat'){journey.skipSeat();scene?.setPlayerPraying(true);}else journey.next();renderPrayer();};
 element('prayer-pause').onclick=()=>{if(journey){journey.paused=!journey.paused;renderPrayer();}};
 element('prayer-end').onclick=()=>{scene?.cancelWalk();endPrayer();};
 element('prayer-write').onclick=()=>{if(journey){journey.paused=true;writingInJourney=true;prayerDock.hidden=true;scene?.setPlayerPraying(false);door.click();}};
-function resumePrayerAfterRoom(){if(journey&&writingInJourney){writingInJourney=false;journey.stage='seat';journey.paused=false;journeyBusy=false;prayerDock.hidden=false;renderPrayer();}}
+function resumePrayerAfterRoom(){if(journey&&writingInJourney){writingInJourney=false;journey.stage='seat';journey.standing=false;journey.paused=false;journeyBusy=false;prayerDock.hidden=false;renderPrayer();}}
 const liturgyPanel=element<HTMLDialogElement>('liturgy-panel'),liturgyDock=element('liturgy-dock');
 let liturgyElapsed:number|undefined,liturgyPhase=-1,liturgyAudioPaused=false;
 element('liturgy-open').onclick=()=>{scene?.mode('choir');liturgyPanel.showModal();};
@@ -513,16 +523,16 @@ element('liturgy-stop').onclick=stopLiturgy;
 let experienceLast=performance.now();
 function tickExperience(now:number){
   const delta=Math.min(1,(now-experienceLast)/1000);experienceLast=now;
-  const available=active&&!document.hidden&&!document.querySelector('dialog[open]')&&!releasing&&!gameRunning&&!quietView;
+  const available=prayerCanAdvance({active,hidden:document.hidden,modal:!!document.querySelector('dialog[open]'),releasing,game:gameRunning});
   if(journey){
     if(journeyBusy&&!scene?.navigating&&!scene?.effect){journeyBusy=false;}
-    const prior=journey.stage;journey.tick(delta,available&&!scene?.navigating&&!!scene?.seated);
-    if(prior==='prayer'&&(journey.stage==='complete'||!scene?.seated))scene?.setPlayerPraying(false);
-    if(prior==='prayer'&&!scene?.seated){journey.stage='seat';}
+    const prior=journey.stage;journey.tick(delta,available&&!scene?.navigating&&(journey.standing||!!scene?.seated));
+    if(prior==='prayer'&&(journey.stage==='complete'||!journey.standing&&!scene?.seated))scene?.setPlayerPraying(false);
+    if(prior==='prayer'&&(!journey.standing&&!scene?.seated||journey.standing&&!scene?.playerPraying&&journey.stage!=='complete')){journey.stage='seat';journey.standing=false;}
     if(writingInJourney&&!scene?.navigating&&!confessional.open&&!releasing)resumePrayerAfterRoom();
-    prayerDock.hidden=!available;renderPrayer();
+    prayerDock.hidden=!available||quietView;renderPrayer();
   }
-  liturgyDock.hidden=liturgyElapsed===undefined||!available;
+  liturgyDock.hidden=liturgyElapsed===undefined||!available||quietView;
   if(liturgyElapsed!==undefined&&liturgyPhase===1){
     if(!available&&!choirAudio.paused){choirAudio.pause();liturgyAudioPaused=true;}
     else if(available&&liturgyAudioPaused){liturgyAudioPaused=false;void choirAudio.play().catch(()=>{});}

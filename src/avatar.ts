@@ -31,7 +31,10 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
   const group=new T.Group(),rig=new T.Group(),body=new T.Group(),head=new T.Group();group.add(rig);rig.add(body);body.add(head);
   group.name='avatar-'+avatarPatterns[pattern];
   const width=pattern===4?.29:pattern===0?.265:pattern===3?.235:.25;
-  const cloth=new T.MeshStandardMaterial({color,roughness:.85});
+  const fabricCanvas=document.createElement('canvas');fabricCanvas.width=fabricCanvas.height=64;const fabricContext=fabricCanvas.getContext('2d');
+  if(fabricContext){fabricContext.fillStyle='#eeece6';fabricContext.fillRect(0,0,64,64);for(let i=0;i<64;i+=2){fabricContext.fillStyle=i%4?'#e0ddd6':'#e7e4dc';fabricContext.fillRect(i,0,1,64);fabricContext.fillRect(0,i,64,1);}}
+  const fabricMap=new T.CanvasTexture(fabricCanvas);fabricMap.colorSpace=T.SRGBColorSpace;fabricMap.wrapS=fabricMap.wrapT=T.RepeatWrapping;fabricMap.repeat.set(3,3);
+  const cloth=new T.MeshStandardMaterial({color,map:fabricMap,bumpMap:fabricMap,bumpScale:.002,roughness:.96});
   const light=new T.MeshStandardMaterial({color:new T.Color(color).lerp(new T.Color('#ece5d7'),.63),roughness:.9});
   const shirt=new T.MeshStandardMaterial({color:'#e6ded0',roughness:.95});
   const trousers=new T.MeshStandardMaterial({color:pattern===4?'#50473e':'#363c42',roughness:.9});
@@ -42,13 +45,13 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
   part(body,tailoredTorso(width,pattern===4?.255:.205),cloth,0,0,0);
   rounded(rig,trousers,0,-.015,0,.4,.18,.29);
   rounded(body,skin,0,.63,0,.14,.19,.14);
-  head.position.set(0,.83,-.005);
+  head.position.set(0,.79,-.005);head.scale.set(.84,.85,.88);
   rounded(head,skin,0,.02,0,.37,.46,.34);
   const eyesOpen=new T.Group(),eyesClosed=new T.Group();head.add(eyesOpen,eyesClosed);eyesClosed.visible=false;
   for(const side of [-1,1]){
     rounded(head,skin,side*.185,.02,0,.065,.115,.06);
-    rounded(eyesOpen,shirt,side*.068,.055,-.15,.069,.039,.02);
-    rounded(eyesOpen,leather,side*.068,.055,-.164,.026,.03,.014);
+    rounded(eyesOpen,shirt,side*.068,.055,-.15,.055,.027,.02);
+    rounded(eyesOpen,leather,side*.068,.055,-.164,.021,.023,.014);
     const brow=solid(head,hair,side*.07,.105,-.153,.07,.012,.012);brow.rotation.z=side*.1;
     const lid=new T.CatmullRomCurve3([new T.Vector3(side*.068-.035,.056,-.17),new T.Vector3(side*.068,.046,-.174),new T.Vector3(side*.068+.035,.056,-.17)]);
     part(eyesClosed,new T.TubeGeometry(lid,10,.005,5,false),hair,0,0,0);
@@ -75,17 +78,16 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
     rounded(hairstyle,hair,-.12,.16,-.1,.14,.13,.14);
   }else{
     cap.scale.set(1,1.05,1);
-    // Overlapping broad locks keep one silhouette instead of separate bead-like curls.
-    for(let i=0;i<14;i++){
-      const angle=i*2.39996,y=.055+(i%4)*.05,radius=.155;
-      const curl=rounded(hairstyle,hair,Math.cos(angle)*radius,y,Math.sin(angle)*radius+.015,.13,.16,.13);curl.rotation.z=Math.sin(angle)*.35;
-    }
+    const vertices=cap.geometry.getAttribute('position');
+    for(let i=0;i<vertices.count;i++){const x=vertices.getX(i),y=vertices.getY(i),z=vertices.getZ(i),a=Math.atan2(x,z);const wave=1+.035*Math.sin(a*9+y*27)+.025*Math.cos(a*5-y*19);vertices.setXYZ(i,x*wave,y,z*wave);}cap.geometry.computeVertexNormals();
+    for(let i=0;i<3;i++){const lock=rounded(hairstyle,hair,-.12+i*.11,.145,-.12,.15,.075,.13);lock.rotation.z=(i-1)*.22;}
+
   }
   const lapel=(x:number,angle:number)=>{const piece=solid(body,light,x,.39,-.185,.1,.32,.035);piece.rotation.z=angle;};
   if(pattern===0){lapel(-.083,-.28);lapel(.083,.28);solid(body,shirt,0,.45,-.16,.085,.22,.035);solid(body,trousers,0,.4,-.183,.027,.16,.016);solid(body,light,-.145,.29,-.14,.085,.018,.025);}
   if(pattern===1){solid(body,shirt,0,.49,-.15,.15,.18,.04);lapel(-.09,-.3);lapel(.09,.3);for(let i=0;i<4;i++)part(body,new T.SphereGeometry(.013,8,6),trim,0,.12+i*.074,-.15);}
   if(pattern===2){const scarf=solid(body,light,-.08,.39,-.18,.105,.4,.055);scarf.rotation.z=-.08;rounded(body,light,0,.58,-.035,.4,.1,.3);for(let side of [-1,1])for(let i=0;i<3;i++)part(body,new T.SphereGeometry(.015,8,6),trim,side*.07,.14+i*.095,-.157);}
-  if(pattern===3){solid(body,trim,0,.08,-.008,.43,.045,.29);rounded(body,light,0,.56,-.01,.38,.06,.28);}
+  if(pattern===3){rounded(body,trim,0,.08,-.008,.43,.035,.28);rounded(body,light,0,.56,-.01,.38,.06,.28);}
   if(pattern===4){for(let i=0;i<6;i++){const stripe=solid(body,light,0,.16+i*.052,-.165,.46,.009,.012);stripe.scale.x=1-i*.025;}rounded(body,light,0,.57,0,.32,.06,.25);}
   const skirt=new T.Group(),skirtStanding=new T.Group(),lap=new T.Group();rig.add(skirt);skirt.add(skirtStanding,lap);lap.visible=false;
   if(pattern===2||pattern===3){
@@ -105,15 +107,16 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
     const sleeve=pattern===1?shirt:cloth;
     rounded(arm,sleeve,0,-.025,0,.155,.18,.15);
     rounded(elbow,sleeve,0,-.02,0,.12,.12,.12);
-    part(arm,new T.CapsuleGeometry(.067,.19,5,12),sleeve,0,-.14,0);
-    part(elbow,new T.CapsuleGeometry(.058,.18,5,12),sleeve,0,-.13,0);
+    part(arm,new T.CylinderGeometry(.073,.063,.29,16),sleeve,0,-.145,0);
+    part(elbow,new T.CylinderGeometry(.062,.049,.285,16),sleeve,0,-.1425,0);
     rounded(hand,skin,0,-.01,-.006,.105,.13,.075);rounded(hand,skin,-side*.047,0,-.012,.035,.065,.045);
-    solid(elbow,light,0,-.245,0,.12,.035,.12);arms.push(arm);elbows.push(elbow);hands.push(hand);
+    rounded(elbow,light,0,-.245,0,.112,.028,.11);arms.push(arm);elbows.push(elbow);hands.push(hand);
   }
   const legs:T.Group[]=[],knees:T.Group[]=[],feet:T.Group[]=[];
   for(const side of [-1,1]){
     const hip=new T.Group(),knee=new T.Group(),foot=new T.Group();hip.position.set(side*.105,-.015,0);rig.add(hip);knee.position.y=-.43;hip.add(knee);foot.position.y=-.43;knee.add(foot);
     part(hip,new T.CapsuleGeometry(.081,.27,5,12),trousers,0,-.205,0);
+    rounded(knee,trousers,0,0,0,.135,.14,.135);
     part(knee,new T.CapsuleGeometry(.066,.29,5,12),trousers,0,-.21,0);
     rounded(foot,leather,0,-.052,-.065,.155,.13,.29);solid(foot,leather,0,-.102,-.06,.15,.026,.27);
     legs.push(hip);knees.push(knee);feet.push(foot);
@@ -131,7 +134,7 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
   const veilMaterial=new T.MeshStandardMaterial({color:'#f5e9cf',map:lace,transparent:true,opacity:.75,side:T.DoubleSide,depthWrite:false,roughness:1});
   part(veil,new T.SphereGeometry(.207,24,16,0,Math.PI*2,0,Math.PI*.58),veilMaterial,0,.087,.018);
   const drape=part(veil,new T.CylinderGeometry(.2,.33,.59,28,8,true,Math.PI*.08,Math.PI*1.84),veilMaterial,0,-.17,.055);drape.rotation.y=Math.PI;
-  for(const rigid of [body,head,hairstyle,eyesOpen,eyesClosed,prayerHands,...elbows,...hands,...legs,...knees,...feet])mergeRigid(rigid);
+  for(const rigid of [body,head,hairstyle,eyesOpen,eyesClosed,prayerHands,...arms,...elbows,...hands,...legs,...knees,...feet])mergeRigid(rigid);
   const shadow=makeContactShadow();group.add(shadow);
   const avatar={group,rig,body,head,arms,elbows,hands,hand:hands[1],legs,knees,feet,veil,skirt,skirtStanding,lap,pattern,hairType,hairstyle,eyesOpen,eyesClosed,prayerHands,praying:false,shadow,pose:{seat:0,gait:0,walk:0}};
   animateAvatar(avatar,false,0,0,1,true);return avatar;
@@ -156,7 +159,7 @@ export function animateAvatar(avatar:Avatar,seated:boolean,speed:number,seconds:
     avatar.elbows[i].rotation.set(.12+seat*.58+Math.abs(stride)*walk*.12,0,0);
   }
   avatar.skirtStanding.visible=seat<.4;avatar.skirtStanding.scale.y=1-seat*.25;avatar.lap.visible=seat>=.4;
-  const praying=avatar.praying&&seated;
+  const praying=avatar.praying&&speed<.1;
   avatar.eyesOpen.visible=!praying;avatar.eyesClosed.visible=praying;avatar.prayerHands.visible=praying;
   avatar.hands.forEach(hand=>hand.visible=!praying);
   avatar.veil.scale.set(1.1,avatar.hairType===2||avatar.hairType===4?1.13:1.03,avatar.hairType===3?1.3:1.1);

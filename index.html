@@ -6,6 +6,7 @@
 <section id="welcome" class="welcome"><div class="entry"><p id="scene-index" class="eyebrow">CATHEDRALS · 01</p><h1 id="scene-name">바릴로체 대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><button id="enter-sound" type="button">소리 없이 들어가기</button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
 <div id="hotspots" aria-label="가까운 공간의 활동"></div>
 <div id="notice" class="notice" role="status" hidden></div>
+<section id="walk-status" aria-label="이동 안내" hidden><span id="walk-destination" role="status"></span><progress id="walk-progress" max="1" value="0" aria-label="목적지까지 이동 진행"></progress><button id="walk-cancel" type="button">이동 취소</button></section>
 <button id="retry" class="retry" type="button" hidden>다시 불러오기</button>
 <footer id="controls" hidden><span>바닥을 눌러 걷기 · 드래그로 둘러보기<br>WASD / 방향키 · 휠로 확대/축소</span><div><button id="prayer-open" type="button">✧ 잠시 기도하기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">마음 털어놓기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="activities-open" type="button">더 둘러보기</button></div></footer>
 <dialog id="activities" aria-labelledby="activities-title"><div class="panel-head"><h2 id="activities-title">이곳에서 천천히</h2><button id="activities-close" aria-label="활동 메뉴 닫기" type="button">✕</button></div>
@@ -58,7 +59,7 @@
 <dialog id="points" aria-labelledby="points-title">
   <div class="panel-head"><h2 id="points-title">관람 지점</h2><button id="points-close" type="button" aria-label="관람 지점 닫기">✕</button></div>
   <p>지점을 고르면 가까이 걸어가 그곳을 바라봅니다.</p>
-  <div class="point-list">
+  <div class="point-list"><button id="point-feature" type="button">공간의 상징<small>대표 창과 천장, 성소 장식을 바라볼 수 있는 자리로 갑니다.</small></button>
     <button id="point-altar" type="button">제대 앞<small>본당 중앙에서 제대와 그 뒤의 아치를 바라봅니다.</small></button>
     <button id="point-entrance" type="button">대형 출입문<small>트리 옆 석조 아치와 목재 양문을 바라봅니다.</small></button>
       <button id="point-tree" type="button">뒤편 크리스마스 트리<small>본당 뒤쪽의 불빛과 장식을 바라봅니다.</small></button>

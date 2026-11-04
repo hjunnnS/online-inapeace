@@ -99,23 +99,39 @@ function grainTexture(wood:boolean){
       ctx.fillStyle='rgba(45,34,25,'+(random()*.12)+')';
       ctx.fillRect(random()*s,random()*s,wood?1:random()*3,wood?10+random()*55:random()*2);
     }
-    if(!wood){ctx.strokeStyle='#948a7955';ctx.lineWidth=2;ctx.strokeRect(1,1,s-2,s-2);}
+    if(!wood){
+      ctx.strokeStyle='#8b817466';ctx.lineWidth=2;
+      for(let row=0;row<4;row++){const y=row*s/4;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(s,y);ctx.stroke();for(let col=-1;col<3;col++){const x=col*s/2+(row%2)*s/4;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+s/4);ctx.stroke();}}
+    }
   });
 }
 export function enrichMaterials(root:T.Group){
-  const stone=grainTexture(false),wood=grainTexture(true);
-  const seen=new Set<T.Material>();
+  const stone=grainTexture(false),wood=grainTexture(true);stone.wrapS=stone.wrapT=wood.wrapS=wood.wrapT=T.RepeatWrapping;
+  const seen=new Set<T.Material>(),oldGeometry=new Set<T.BufferGeometry>();
+  root.updateMatrixWorld(true);
   root.traverse(node=>{
     if(!(node instanceof T.Mesh))return;
     for(const material of Array.isArray(node.material)?node.material:[node.material]){
       if(!(material instanceof T.MeshStandardMaterial)||seen.has(material))continue;
       seen.add(material);
-      if(material.emissiveIntensity>.5)continue;
-      material.map=material.color.r<.32&&material.color.g<.24?wood:stone;
+      if(material.emissiveIntensity>.5||material.metalness>.25)continue;
+      material.map=material.color.r<.32&&material.color.r>material.color.g*1.38&&material.color.g>material.color.b*1.22?wood:stone;
       material.bumpMap=material.map;material.bumpScale=material.metalness>.25?0:.025;
       material.roughness=material.metalness>.25?.36:.86;material.needsUpdate=true;
     }
+    const materials=Array.isArray(node.material)?node.material:[node.material];
+    if(materials.some(material=>material instanceof T.MeshStandardMaterial&&material.map&&(material.map===stone||material.map===wood))){
+      const old=node.geometry,geo=old.clone(),position=geo.getAttribute('position'),normals=geo.getAttribute('normal'),uvs=new Float32Array(position.count*2),normalMatrix=new T.Matrix3().getNormalMatrix(node.matrixWorld);
+      for(let i=0;i<position.count;i++){
+        const point=new T.Vector3().fromBufferAttribute(position,i).applyMatrix4(node.matrixWorld),normal=normals?new T.Vector3().fromBufferAttribute(normals,i).applyMatrix3(normalMatrix).normalize():new T.Vector3(0,1,0);
+        const scale=materials.some(material=>material instanceof T.MeshStandardMaterial&&material.map===wood)?1.8:.45;
+        const ax=Math.abs(normal.x),ay=Math.abs(normal.y),az=Math.abs(normal.z);
+        uvs[i*2]=(ay>ax&&ay>az?point.x:ax>az?point.z:point.x)*scale;uvs[i*2+1]=(ay>ax&&ay>az?point.z:point.y)*scale;
+      }
+      geo.setAttribute('uv',new T.BufferAttribute(uvs,2));node.geometry=geo;oldGeometry.add(old);
+    }
   });
+  oldGeometry.forEach(geometry=>geometry.dispose());
 }
 export { makeProjections } from './stainedglass';
 export function markerRing(){
@@ -151,7 +167,7 @@ export function makeChoir(){
   for(let row=0;row<2;row++){
     mesh(group,new T.BoxGeometry(6,.12,1),wood,[0,1.2+row*.5,-16.6-row*.8]);
     for(let column=0;column<5;column++){
-      const person=makeAvatar(column%2?'#6b303b':'#753d43');person.group.scale.setScalar(.62);
+      const person=makeAvatar(column%2?'#6b303b':'#753d43');person.group.scale.setScalar(.78);
       person.group.position.set(-2.3+column*1.15,1.25+row*.5,-16.6-row*.8);person.group.rotation.y=Math.PI;
       mesh(person.rig,new T.ConeGeometry(.31,.26,3),white,[0,.4,0]);
       person.arms.forEach(arm=>arm.rotation.x=.65);

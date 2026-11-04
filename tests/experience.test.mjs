@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {NavigationIntent,PrayerJourney} from '../src/intent.ts';
+import {NavigationIntent,PrayerJourney,prayerCanAdvance} from '../src/intent.ts';
 import {readPreferences,writePreferences} from '../src/preferences.ts';
 test('temporary menus preserve the destination and deliver its action exactly once',()=>{
  const intent=new NavigationIntent();let arrivals=0;const path=[{x:2,z:3}];intent.path=path;intent.arrival=()=>arrivals++;
@@ -27,4 +27,16 @@ test('only allowed environmental preferences survive a write, never private writ
  assert.deepEqual(Object.keys(saved.value).sort(),['effects','favorite','light','reduced','volume']);
  assert.equal(JSON.stringify(saved).includes('PRIVATE'),false);
  assert.equal(readPreferences({getItem:()=>JSON.stringify(saved.value)},['paris']).favorite,'paris');
+});
+
+test('a skipped seat enters standing prayer immediately and quiet viewing does not pause its timer',()=>{
+ const session=new PrayerJourney(30);session.next();session.skipSeat();assert.equal(session.stage,'prayer');assert.equal(session.standing,true);
+ const visible={active:true,hidden:false,modal:false,releasing:false,game:false};
+ for(let i=0;i<10;i++)session.tick(1,prayerCanAdvance(visible));assert.equal(session.remaining,20);
+ for(const stopped of [{...visible,hidden:true},{...visible,modal:true},{...visible,game:true}])assert.equal(prayerCanAdvance(stopped),false);
+ session.paused=true;session.tick(1,prayerCanAdvance(visible));assert.equal(session.remaining,20);
+});
+test('cancelling a labelled route clears progress and cannot fire a late arrival',()=>{
+ const intent=new NavigationIntent();let arrived=false;intent.path=[1,2];intent.label='촛대';intent.totalDistance=10;intent.arrival=()=>{arrived=true;};
+ intent.transition('audio');assert.equal(intent.label,'촛대');intent.cancel();intent.complete();assert.equal(arrived,false);assert.equal(intent.label,'');assert.equal(intent.totalDistance,0);
 });
