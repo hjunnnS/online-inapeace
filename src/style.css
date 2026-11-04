@@ -24,3 +24,17 @@
 #confessional::backdrop{background:#100d0822}
 #confessional #privacy{font-size:.76rem;color:#cdbd9f}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+#controls{align-items:center}#controls>div{max-width:900px;border:1px solid #d5ba7c40;background:#1e1913dd;padding:7px;border-radius:15px;backdrop-filter:blur(8px)}
+#controls button{font-size:.78rem;padding:.6rem .7rem;border-color:transparent;background:transparent}
+#controls button:hover{background:#e2c59318}#controls button[aria-pressed=true]{color:#f9d38a;background:#cda56b25}
+#reflection{width:min(560px,94vw)}.beads{height:min(53vh,430px);padding:0;justify-content:center;touch-action:none;cursor:grab;border-radius:120px;background:radial-gradient(ellipse,#a17a3a12,transparent 65%)}
+.beads svg{height:100%;max-width:100%;overflow:visible}.beads circle{fill:#9f7756;stroke:#d2ae7b;stroke-width:1}.beads circle.current{fill:#ffe1a2;stroke:#fff2ce;stroke-width:3;filter:drop-shadow(0 0 7px #ffc678)}
+.rosary p{font-size:.8rem}#photo-panel{width:min(520px,94vw);max-height:94dvh;overflow:auto}#photo-preview{display:block;width:100%;max-height:65vh;object-fit:contain;border-radius:5px}#photo-save{padding:.65rem .9rem;color:#e2c593;border:1px solid #e2c59360;border-radius:7px;text-decoration:none}
+#rhythm{position:absolute;inset:0;z-index:5;pointer-events:none;background:linear-gradient(90deg,transparent 40%,#1c1511dc 70%);padding:24px;color:#f6e8cf}
+#rhythm button{pointer-events:auto}.rhythm-head{display:flex;align-items:center;justify-content:space-between;gap:10px}#conduct-feedback,#conduct-score,#rhythm>.fine{text-align:right;margin-right:3%;text-shadow:0 2px 12px #000}
+#conduct-feedback{font-family:Georgia,serif;font-size:2.2rem;min-height:45px;color:#f8d69b}
+#note-lanes{position:absolute;bottom:135px;right:3%;height:48vh;width:min(400px,55vw);border-bottom:2px solid #f6d38e;background:repeating-linear-gradient(90deg,transparent,transparent calc(25% - 1px),#ead3a526 25%);overflow:hidden}
+#note-lanes span{position:absolute;font-size:2rem;color:#ffe4b0;text-shadow:0 0 12px #e4bd67;transform:translateX(-50%)}
+.rhythm-keys{position:absolute;bottom:70px;right:3%;display:flex;width:min(400px,55vw);justify-content:space-around}.rhythm-keys button{border-radius:50%;font-size:1.8rem;width:64px;height:64px;padding:0;border-color:#ddc28b80;background:#221912d9}
+#rhythm>.fine{position:absolute;bottom:16px;right:3%;max-width:55vw}#conduct-retry{position:absolute;right:4%;top:35%}
+@media(max-width:650px){#controls>span{display:none}#controls>div{justify-content:center;width:100%}.rhythm-keys button{width:42px;height:42px;font-size:1.3rem}#rhythm{padding:12px}.rhythm-head{font-size:.7rem}.rhythm-head button{font-size:.7rem}#confessional{margin:8vh auto auto}.beads{height:35vh}}

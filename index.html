@@ -2,12 +2,12 @@
 <html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="바릴로체 성당의 본당을 걸으며 잠시 쉬어가는 브라우저 시제품."><title>In a Peace · 바릴로체</title></head>
 <body><main id="app">
 <div id="viewport" aria-label="성당 3D 장면"></div>
-<header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="audio-open" type="button">♪ 음성</button><button id="exit" type="button" hidden>나가기</button></div></header>
+<header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small><small id="background-note" hidden>배경 인물이 함께 머무는 공간</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="audio-open" type="button">♪ 음성</button><button id="exit" type="button" hidden>나가기</button></div></header>
 <section id="welcome" class="welcome"><div class="entry"><p id="scene-index" class="eyebrow">CATHEDRALS · 01</p><h1 id="scene-name">바릴로체 대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><button id="enter-sound" type="button">성당 소리와 함께 들어가기</button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
 <div id="hotspots" aria-label="가까운 공간의 활동"></div>
 <div id="notice" class="notice" role="status" hidden></div>
 <button id="retry" class="retry" type="button" hidden>다시 불러오기</button>
-<footer id="controls" hidden><span>WASD / 방향키 · 바닥 클릭으로 이동<br>드래그로 둘러보기 · 휠로 확대/축소</span><div><button id="veil" type="button" hidden>미사포 쓰기</button><button id="reflection-open" type="button" hidden>조명 · 묵주</button><button id="points-open" type="button" hidden>관람 지점</button><button id="candle" type="button" hidden>촛불 켜기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">고해소로 걷기</button></div></footer>
+<footer id="controls" hidden><span>WASD / 방향키 · 바닥 클릭으로 이동<br>드래그로 둘러보기 · 휠로 확대/축소</span><div><button id="choir-open" type="button" hidden>성가대</button><button id="photo-open" type="button" hidden>기념사진</button><button id="veil" type="button" hidden>미사포 쓰기</button><button id="reflection-open" type="button" hidden>조명 · 묵주</button><button id="points-open" type="button" hidden>관람 지점</button><button id="candle" type="button" hidden>촛불 켜기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">고해소로 걷기</button></div></footer>
 <div id="effect-panel" hidden><p>잠시 마음을 내려놓습니다.</p><button id="effect-skip" type="button">연출 건너뛰기 · Esc</button></div>
 <output id="qa-status" hidden></output>
 <button id="quiet-exit" type="button" hidden>조작 버튼 다시 보기 <span aria-hidden="true">· Esc</span></button>
@@ -19,10 +19,32 @@
   <section class="rosary" aria-labelledby="rosary-title">
     <h3 id="rosary-title">묵주 한 알씩 넘기기</h3>
     <p>가톨릭에서 묵주는 기도의 순서를 따라가는 데 쓰입니다. 원한다면 한 알씩 넘기며 잠시 머물러 보세요.</p>
-    <div id="beads" class="beads" aria-hidden="true"></div>
+    <div id="beads" class="beads" role="group" aria-label="묵주. 아래로 당기거나 한 알 넘기기 버튼을 누르세요."></div>
     <p id="bead-status" role="status">아직 넘긴 알이 없습니다.</p>
     <div class="dialog-actions"><button id="bead-next" type="button">한 알 넘기기</button><button id="bead-reset" type="button">처음으로</button></div>
   </section>
+</dialog>
+<dialog id="choir-panel" aria-labelledby="choir-title">
+  <div class="panel-head"><h2 id="choir-title">제대 앞 성가대</h2><button id="choir-close" type="button" aria-label="성가대 닫기">✕</button></div>
+  <p>잠시 앉아 듣거나, 지휘 자리에 서 보세요.</p>
+  <p class="fine">고요한 빛 · 1분 6초<br>이 공간을 위해 만든 합성 합창입니다.</p>
+  <p id="choir-status" role="status">준비되었습니다.</p>
+  <div class="dialog-actions"><button id="choir-listen" type="button">앉아서 듣기</button><button id="conduct-start" type="button" class="primary">직접 지휘하기</button></div>
+  <button id="choir-stop" type="button">공연 정지</button>
+</dialog>
+<section id="rhythm" aria-label="성가대 지휘 체험" hidden>
+  <div class="rhythm-head"><span>고요한 빛 · 지휘 체험</span><button id="conduct-exit" type="button">본당으로 돌아가기 · Esc</button></div>
+  <p id="conduct-feedback" role="status">준비</p><p id="conduct-score">맞춘 음표 0 / 40</p>
+  <div id="note-lanes" aria-hidden="true"></div>
+  <div class="rhythm-keys"><button data-direction="left" type="button" aria-label="왼쪽 방향">←</button><button data-direction="down" type="button" aria-label="아래 방향">↓</button><button data-direction="up" type="button" aria-label="위 방향">↑</button><button data-direction="right" type="button" aria-label="오른쪽 방향">→</button></div>
+  <p class="fine">화살표가 금빛 선에 닿을 때 방향키나 화면 버튼을 눌러 보세요.</p>
+  <button id="conduct-retry" type="button" hidden>다시 지휘하기</button>
+</section>
+<dialog id="photo-panel" aria-labelledby="photo-title">
+  <div class="panel-head"><h2 id="photo-title">이곳의 한 순간</h2><button id="photo-close" type="button" aria-label="사진 닫기">✕</button></div>
+  <img id="photo-preview" alt="성당에서의 기념사진 미리보기">
+  <div class="dialog-actions"><button id="photo-current" type="button">지금 시점</button><button id="photo-front" type="button">캐릭터 정면</button><a id="photo-save" download="in-a-peace.png">사진 저장</a></div>
+  <p id="photo-status" role="status"></p>
 </dialog>
 <dialog id="points" aria-labelledby="points-title">
   <div class="panel-head"><h2 id="points-title">바릴로체 관람 지점</h2><button id="points-close" type="button" aria-label="관람 지점 닫기">✕</button></div>
@@ -42,5 +64,6 @@
 <p id="background-info" class="fine"></p>
 <p id="background-status" class="fine" role="status">배경 소리 꺼짐</p>
 <button id="background-toggle" type="button">배경 소리 켜기</button>
-<label>배경 음량 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">전례 문구를 발췌한 시제품 낭독입니다.</p></dialog>
+<label>행동 효과음 <input id="effect-volume" type="range" min="0" max="1" step="0.05" value="0"></label>
+<label>배경·성가대 음량 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">전례 문구를 발췌한 시제품 낭독입니다.</p></dialog>
 </main><script type="module" src="/src/main.ts"></script></body></html>

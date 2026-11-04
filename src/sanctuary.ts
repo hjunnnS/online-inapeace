@@ -148,6 +148,7 @@ export function enrichMaterials(root:T.Group){
       seen.add(material);
       if(material.emissiveIntensity>.5)continue;
       material.map=material.color.r<.32&&material.color.g<.24?wood:stone;
+      material.bumpMap=material.map;material.bumpScale=material.metalness>.25?0:.025;
       material.roughness=material.metalness>.25?.36:.86;material.needsUpdate=true;
     }
   });
@@ -195,4 +196,25 @@ export function makeAltarDecor(){
     const taper=makeTaper();taper.root.position.set(x,.45+height,z);group.add(taper.root);tapers.push(taper);
   }
   return {group,tapers};
+}
+
+
+export function makeChoir(){
+  const group=new T.Group();
+  const people:ReturnType<typeof makeAvatar>[]=[];
+  const white=new T.MeshStandardMaterial({color:'#efe8d7',roughness:.9});
+  const wood=new T.MeshStandardMaterial({color:'#473127',roughness:.8});
+  for(let row=0;row<2;row++){
+    mesh(group,new T.BoxGeometry(6,.12,1),wood,[0,1.2+row*.5,-16.6-row*.8]);
+    for(let column=0;column<5;column++){
+      const person=makeAvatar(column%2?'#6b303b':'#753d43');person.group.scale.setScalar(.62);
+      person.group.position.set(-2.3+column*1.15,1.25+row*.5,-16.6-row*.8);person.group.rotation.y=Math.PI;
+      mesh(person.rig,new T.ConeGeometry(.31,.26,3),white,[0,1.04,0]);
+      person.arms.forEach(arm=>arm.rotation.x=.65);
+      person.veil.visible=false;group.add(person.group);people.push(person);
+    }
+  }
+  const spotlight=new T.SpotLight('#ffe1a1',35,12,.35,.65,1.4);spotlight.position.set(-1,7,-9);
+  spotlight.target.position.set(0,1,-11);spotlight.visible=false;group.add(spotlight,spotlight.target);
+  return {group,people,spotlight};
 }

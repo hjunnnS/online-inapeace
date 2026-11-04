@@ -1,5 +1,6 @@
 import * as T from 'three';
-import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
+import { disposeObject as unload } from './resources';
+import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export type SceneId = string;
@@ -11,17 +12,6 @@ const radius = .28;
 const step = .36;
 const keyDirections:Record<string,[number,number]> = {w:[0,-1],a:[-1,0],s:[0,1],d:[1,0],arrowup:[0,-1],arrowleft:[-1,0],arrowdown:[0,1],arrowright:[1,0]};
 
-function unload(group:T.Group) {
-  const geometry=new Set<T.BufferGeometry>(), materials=new Set<T.Material>();
-  group.traverse(node=>{
-    if (!(node instanceof T.Mesh)) return;
-    geometry.add(node.geometry);
-    for(const m of Array.isArray(node.material)?node.material:[node.material])materials.add(m);
-  });
-  geometry.forEach(g=>g.dispose());
-  materials.forEach(m=>{for(const value of Object.values(m))if(value instanceof T.Texture)value.dispose();m.dispose();});
-  group.removeFromParent();
-}
 function decode(root:T.Group):Place {
   const place:Place={root,bounds:root.userData.bounds??root.children[0]?.userData.bounds,blockers:[],seats:[],door:new T.Vector3(),spawn:new T.Vector3()};
   if(!Array.isArray(place.bounds)||place.bounds.length!==4||!place.bounds.every(Number.isFinite))throw new Error('장면 경계가 없습니다.');
@@ -100,6 +90,42 @@ export class Walkthrough {
   private lightPreset:LightPreset='day';
   private reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   private particles=new Particles();
+  private choir?:ReturnType<typeof makeChoir>;
+  private backgroundPeople:{avatar:ReturnType<typeof makeAvatar>;seated:boolean;phase:number;taper?:Taper}[]=[];
+  private choirPlaying=false;
+  private conductBeat=0;
+  setChoirPlaying(playing:boolean){this.choirPlaying=playing;}
+  get choirDistance(){return this.position.distanceTo(barilochePoints.altar.stop);}
+  walkToChoir(done:()=>void){if(this.candle)this.go(barilochePoints.altar.stop,()=>{this.framing=barilochePoints.altar.view;done();});}
+  startConduct(){
+    this.clear();this.seated=false;this.position.set(0,0,-10.7);this.avatar.group.rotation.y=0;
+    this.mode('conduct');this.choirPlaying=true;
+    if(this.choir)this.choir.spotlight.visible=true;
+  }
+  finishConduct(){
+    this.choirPlaying=false;
+    if(this.choir)this.choir.spotlight.visible=false;
+    this.mode('walk');this.framing=barilochePoints.altar.view;this.cinematic=true;
+  }
+  conductHit(){this.conductBeat=.3;this.particles.start(this.position.clone().setY(1.1));}
+  capturePhoto(front:boolean){
+    const position=this.camera.position.clone(),rotation=this.camera.quaternion.clone();
+    const visible=this.avatar.group.visible,fov=this.camera.fov;
+    try{
+      this.avatar.group.visible=true;
+      if(front){
+        const direction=new T.Vector3(0,0,-1).applyAxisAngle(T.Object3D.DEFAULT_UP,this.avatar.group.rotation.y);
+        const focus=this.avatar.rig.getWorldPosition(new T.Vector3()).setY(this.seated?1.28:1.25);
+        const eye=focus.clone().addScaledVector(direction,2.8).setY(2.65);
+        if(this.valid(eye.x,eye.z,.1)){this.camera.position.copy(eye);this.camera.lookAt(focus);}
+        this.camera.fov=42;this.camera.updateProjectionMatrix();
+      }
+      this.renderer.render(this.scene,this.camera);
+      return this.renderer.domElement.toDataURL('image/png');
+    }finally{
+      this.camera.position.copy(position);this.camera.quaternion.copy(rotation);this.camera.fov=fov;this.camera.updateProjectionMatrix();this.avatar.group.visible=visible;
+    }
+  }
   private altarDecor?:ReturnType<typeof makeAltarDecor>;
   private projections?:ReturnType<typeof makeProjections>;
   private markers:T.Mesh[]=[];
@@ -161,7 +187,7 @@ export class Walkthrough {
     const spots=[
       {id:'candle',label:this.carried?'촛불 놓기':'촛불 켜기',position:candleStop},
       {id:'confess',label:'고해소',position:this.place!.door},
-      {id:'altar',label:'제대 앞',position:barilochePoints.altar.stop},
+      {id:'choir',label:'성가대 감상',position:barilochePoints.altar.stop},
       {id:'sit',label:this.seated?'일어나기':'앉기',position:[...this.place!.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0]},
     ];
     return spots.filter(spot=>spot.position.distanceTo(this.position)<5).flatMap(spot=>{
@@ -261,7 +287,7 @@ export class Walkthrough {
     try{next=decode(gltf.scene);}catch(error){unload(gltf.scene);throw error;}
     this.skipEffect();
     if(this.carried)unload(this.carried.root);
-    this.carried=undefined;this.placed=[];this.markers=[];this.avatar.veil.visible=false;
+    this.carried=undefined;this.placed=[];this.markers=[];this.backgroundPeople=[];this.choirPlaying=false;this.avatar.veil.visible=false;
     this.handLight.visible=false;
     if(this.place)unload(this.place.root);
     this.place=next;this.scene.add(next.root);
@@ -269,6 +295,18 @@ export class Walkthrough {
     if(this.candle){
       enrichMaterials(next.root);
       this.altarDecor=makeAltarDecor();next.root.add(this.altarDecor.group);
+      this.choir=makeChoir();next.root.add(this.choir.group);
+      const colors=['#68576d','#6a6d50','#435d72','#755348','#9c8f77','#594e62'];
+      for(let i=0;i<6;i++){
+        const avatar=makeAvatar(colors[i]);
+        const seated=i>=2;
+        if(seated){avatar.group.position.copy(next.seats[(i*7)%next.seats.length]);avatar.rig.scale.y=.78;avatar.rig.position.z=.77;avatar.legs.forEach(leg=>leg.rotation.x=-1.2);}
+        else avatar.group.position.set(i%2?6.6:-6.6,0,8-i*7);
+        avatar.group.scale.setScalar(.94);next.root.add(avatar.group);
+        let taper:Taper|undefined;
+        if(i===0){taper=makeTaper();avatar.hand.add(taper.root);taper.root.rotation.x=-.9;avatar.arms[1].rotation.x=.9;}
+        this.backgroundPeople.push({avatar,seated,phase:i,taper});
+      }
       next.root.add(this.candle.group);
       next.blockers.push({x:6.15,z:13.25,width:1.9,depth:.8});
       this.projections=makeProjections();next.root.add(this.projections.group);
@@ -276,7 +314,7 @@ export class Walkthrough {
         const ring=markerRing();ring.position.x=target.x;ring.position.z=target.z;next.root.add(ring);this.markers.push(ring);
       }
     }else{
-      this.altarDecor=undefined;this.projections=undefined;
+      this.choir=undefined;this.altarDecor=undefined;this.projections=undefined;
     }
     this.setLighting('day');
     this.altarLight.visible=!!this.candle;
@@ -287,7 +325,7 @@ export class Walkthrough {
     return true;
   }
   mode(view:string){
-    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points'&&view!=='reflection')this.framing=undefined;
+    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points'&&view!=='reflection'&&view!=='photo'&&view!=='choir')this.framing=undefined;
 
     this.altarLight.visible=!!this.candle&&view!=='room';
     if(view==='room'){this.cameraEye.set(28.15,1.43,2.47);this.cameraTarget.set(30.05,1.24,-2.2);}
@@ -389,8 +427,8 @@ export class Walkthrough {
     return Math.hypot(this.position.x-x,this.position.z-z);
   }
   private tick=(now:number)=>{
-    const delta=Math.min(.05,(now-(this.last||now))/1000);this.last=now;
-    if(delta>0){this.frames.push(delta*1000);if(this.frames.length>120)this.frames.shift();}
+    const elapsed=(now-(this.last||now))/1000,delta=Math.min(.05,elapsed);this.last=now;
+    if(elapsed>0&&elapsed<.25){this.frames.push(elapsed*1000);if(this.frames.length>120)this.frames.shift();}
     this.updateLighting(delta);
     this.particles.tick(delta,this.reducedMotion);
     if(this.ceremony){
@@ -398,6 +436,22 @@ export class Walkthrough {
       if(this.ceremony.elapsed>=this.ceremony.duration){const done=this.ceremony.done;this.ceremony=undefined;done?.();}
     }
     const seconds=now/1000;
+    this.conductBeat=Math.max(0,this.conductBeat-delta);
+    if(this.choir){
+      this.choir.people.forEach((person,i)=>{
+        person.rig.rotation.z=this.choirPlaying&&!this.reducedMotion?Math.sin(seconds*2+i*.3)*.025:0;
+        person.arms.forEach(arm=>arm.rotation.x=.65+(this.choirPlaying?Math.sin(seconds*3+i)*.04:0));
+      });
+      for(const person of this.backgroundPeople){
+        if(person.taper)flicker(person.taper,seconds,person.phase,this.reducedMotion);
+        if(person.seated||this.view==='room'||this.view==='loading'||person.avatar.group.position.distanceTo(this.position)<1.2)continue;
+        const direction=person.phase%2?1:-1;
+        person.avatar.group.position.z+=delta*.45*direction;
+        if(person.avatar.group.position.z>10||person.avatar.group.position.z< -8)person.phase++;
+        person.avatar.group.rotation.y=direction>0?Math.PI:0;
+        person.avatar.legs.forEach((leg,i)=>leg.rotation.x=this.reducedMotion?0:Math.sin(seconds*4+i*Math.PI)*.25);
+      }
+    }
     if(this.candle){
       this.candle.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
       this.altarDecor?.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
@@ -407,6 +461,10 @@ export class Walkthrough {
     if(this.carried){flicker(this.carried,seconds,0,this.reducedMotion);this.carried.root.getWorldPosition(this.handLight.position);this.handLight.position.y+=.4;}
     this.handLight.visible=!!this.carried&&this.view==='walk';
     this.avatar.arms[1].rotation.x=this.carried?.9:0;
+    if(this.view==='conduct'){
+      this.avatar.arms[0].rotation.x=.8+Math.sin(seconds*4)*.22;
+      this.avatar.arms[1].rotation.x=1.1+this.conductBeat*1.2;
+    }else this.avatar.arms[0].rotation.x=0;
     this.avatar.veil.scale.y=this.ceremony?.kind==='veil'&&!this.reducedMotion?.9+.1*Math.min(1,this.ceremony.elapsed/.6):1;
     let moved=0;
     if(!this.blocked){
@@ -424,7 +482,9 @@ export class Walkthrough {
       this.avatar.legs.forEach((leg,i)=>{leg.rotation.x=this.seated?-1.24:moved?Math.sin(now*.012+i*Math.PI)*.42:0;});
     }
     const desiredEye=new T.Vector3(),desiredTarget=new T.Vector3();
-    if(this.view==='release'){
+    if(this.view==='conduct'){
+      desiredEye.set(-2.5,2.5,-8);desiredTarget.set(0,1.8,-16);
+    }else if(this.view==='release'){
       const progress=this.ceremony?this.ceremony.elapsed/this.ceremony.duration:1;
       desiredEye.set(1.5,1.8+progress*1.4,10);
       desiredTarget.set(0,3+progress*5,7);
@@ -444,11 +504,11 @@ export class Walkthrough {
       const eye=this.position.clone().setY(this.seated?1.28:1.63);
       desiredEye.copy(eye);desiredTarget.copy(this.framing);
     }else{
-      const center=this.position.clone().add(new T.Vector3(0,this.seated?.87:1.22,0));
+      const center=this.position.clone().add(new T.Vector3(0,this.seated?.65:.88,0));
       const cameraOffset=new T.Vector3(Math.sin(this.yaw),this.pitch+.19,Math.cos(this.yaw));
       let distance=this.distance;
       while(distance>.65&&!this.valid(center.x+cameraOffset.x*distance,center.z+cameraOffset.z*distance,.12))distance-=.16;
-      desiredEye.copy(center).addScaledVector(cameraOffset,distance);desiredTarget.copy(center).add(new T.Vector3(0,.43,0));
+      desiredEye.copy(center).addScaledVector(cameraOffset,distance);desiredTarget.copy(center).add(new T.Vector3(0,.2,0));
     }
     const blend=this.reducedMotion||!this.cameraEye.lengthSq()?1:1-Math.exp(-delta*7);
     this.cameraEye.lerp(desiredEye,blend);this.cameraTarget.lerp(desiredTarget,blend);
