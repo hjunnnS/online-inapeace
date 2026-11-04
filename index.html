@@ -2,7 +2,7 @@
 <html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="바릴로체 성당의 본당을 걸으며 잠시 쉬어가는 브라우저 시제품."><title>In a Peace · 바릴로체</title></head>
 <body><main id="app">
 <div id="viewport" aria-label="성당 3D 장면"></div>
-<header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small><small id="background-note" hidden>배경 인물이 함께 머무는 공간</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="background-quick" type="button" aria-pressed="false" hidden>배경음 켜기</button><button id="audio-open" type="button">♪ 음성</button><button id="exit" type="button" hidden>나가기</button></div></header>
+<header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small><small id="background-note" hidden>가상 신자 10명이 머무는 공간</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="background-quick" type="button" aria-pressed="false" hidden>배경음 켜기</button><button id="audio-open" type="button">♪ 음악</button><button id="exit" type="button" hidden>나가기</button></div></header>
 <section id="welcome" class="welcome"><div class="entry"><p id="scene-index" class="eyebrow">CATHEDRALS · 01</p><h1 id="scene-name">바릴로체 대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><button id="enter-sound" type="button">소리 없이 들어가기</button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
 <div id="hotspots" aria-label="가까운 공간의 활동"></div>
 <div id="notice" class="notice" role="status" hidden></div>
@@ -51,19 +51,17 @@
   <p>지점을 고르면 가까이 걸어가 그곳을 바라봅니다.</p>
   <div class="point-list">
     <button id="point-altar" type="button">제대 앞<small>본당 중앙에서 제대와 그 뒤의 아치를 바라봅니다.</small></button>
+    <button id="point-tree" type="button">뒤편 크리스마스 트리<small>본당 뒤쪽의 불빛과 장식을 바라봅니다.</small></button>
     <button id="point-glass" type="button">스테인드글라스<small>오른쪽 통로에서 색유리 창을 가까이 올려다봅니다.</small></button>
   </div>
 </dialog>
 <dialog id="catalog" aria-labelledby="catalog-title"><div class="panel-head"><div><p class="eyebrow">CATHEDRALS · 10</p><h2 id="catalog-title">어디에서 쉬어갈까요?</h2></div><button id="catalog-close" type="button" aria-label="성당 목록 닫기">✕</button></div><p class="fine">공식 자료를 참고해 본당 일부를 재구성했습니다.</p><ul id="catalog-items"></ul></dialog>
 <dialog id="confessional" aria-labelledby="confessional-title"><p class="eyebrow">PRIVATE SPACE</p><h2 id="confessional-title">마음을 내려놓는 방</h2><p id="privacy">여기에 쓴 글은 이 앱이 전송하거나 저장하지 않습니다. 방을 나가면 입력이 지워집니다. 이 공간은 마음을 정리하는 체험입니다. 실제 고해성사나 사제의 응답을 제공하지 않습니다.</p><label for="thought">지금 마음에 있는 말</label><textarea id="thought" aria-describedby="privacy" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" rows="5" placeholder="비워 두어도 괜찮아요"></textarea><div class="dialog-actions"><button id="cancel" type="button">취소하고 나가기</button><button id="release" type="button" class="primary">글 내려놓기</button></div></dialog>
-<dialog id="audio-panel"><div class="panel-head"><div><p class="eyebrow">LISTEN</p><h2>잠시 듣기</h2></div><button id="audio-close" type="button" aria-label="음성 설정 닫기">✕</button></div>
-<label for="phrase">전례 문구</label><select id="phrase"></select><p id="translation"></p><p id="audio-status" role="status">정지</p><progress id="progress" max="1" value="0" aria-label="재생 위치"></progress><div class="dialog-actions"><button id="play" type="button" class="primary">재생</button><button id="stop" type="button">정지</button></div>
-<label><input id="repeat" type="checkbox"> 반복 재생</label><label>반복 간격 <select id="gap"><option value="3">3초</option><option value="8">8초</option><option value="15">15초</option></select></label>
-<label>음성 음량 <input id="voice-volume" type="range" min="0" max="1" step="0.05" value="0.65"></label><label for="background-track">배경 소리</label>
-<select id="background-track"><option value="room">조용한 본당</option><option value="organ">본당의 여운 · 오르간풍 연주</option></select>
-<p id="background-info" class="fine"></p>
-<p id="background-status" class="fine" role="status">배경 소리 꺼짐</p>
-<button id="background-toggle" type="button">배경 소리 켜기</button>
+<dialog id="audio-panel"><div class="panel-head"><div><p class="eyebrow">LISTEN</p><h2>잠시 듣기</h2></div><button id="audio-close" type="button" aria-label="음악 설정 닫기">✕</button></div>
+<p id="music-title" class="music-title"></p><p id="background-info" class="fine"></p>
+<p id="background-status" role="status">배경 소리 꺼짐</p>
+<progress id="music-progress" max="1" value="0" aria-label="캐럴 재생 위치"></progress><p id="music-position" class="fine"></p>
+<div class="dialog-actions"><button id="background-toggle" type="button">배경 소리 켜기</button><button id="music-next" type="button">다음 캐럴</button></div>
 <label>행동 효과음 <input id="effect-volume" type="range" min="0" max="1" step="0.05" value="0"></label>
-<label>배경·성가대 음량 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">전례 문구를 발췌한 시제품 낭독입니다.</p></dialog>
+<label>배경·성가대 음량 <input id="ambient-volume" type="range" min="0" max="1" step="0.05" value="0"></label><p class="fine">캐럴이 끝나면 다음 곡으로 이어집니다.</p><details><summary>음원 출처와 사용 조건</summary><ol id="music-credits"></ol></details></dialog>
 </main><script type="module" src="/src/main.ts"></script></body></html>

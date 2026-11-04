@@ -1,7 +1,8 @@
 import './style.css';
 import { RhythmSession, directions, songDuration, type Direction } from './rhythm';
 import { Walkthrough, type LightPreset, type SceneId } from './scene';
-import phrases from './phrases.json';
+import carols from './carols.json';
+import { ShuffleQueue } from './shuffle';
 import cathedrals from './cathedrals.json';
 
 function element<T extends HTMLElement>(id:string){const result=document.getElementById(id);if(!result)throw new Error('Missing element '+id);return result as T;}
@@ -16,11 +17,10 @@ const quiet=element('quiet'), quietExit=element('quiet-exit'), points=element<HT
 let quietView=false;
 const notice=element('notice'), retry=element<HTMLButtonElement>('retry');
 const confessional=element<HTMLDialogElement>('confessional'), thought=element<HTMLTextAreaElement>('thought');
-const panel=element<HTMLDialogElement>('audio-panel'), select=element<HTMLSelectElement>('phrase');
-const play=element<HTMLButtonElement>('play'), stop=element<HTMLButtonElement>('stop'), repeat=element<HTMLInputElement>('repeat'), gap=element<HTMLSelectElement>('gap');
-const progress=element<HTMLProgressElement>('progress'), audioStatus=element('audio-status'), translation=element('translation');
-const voiceVolume=element<HTMLInputElement>('voice-volume'), ambientVolume=element<HTMLInputElement>('ambient-volume');
-const backgroundTrack=element<HTMLSelectElement>('background-track');
+const panel=element<HTMLDialogElement>('audio-panel');
+const ambientVolume=element<HTMLInputElement>('ambient-volume');
+const musicProgress=element<HTMLProgressElement>('music-progress'), musicPosition=element('music-position');
+const musicTitle=element('music-title');
 const backgroundToggle=element<HTMLButtonElement>('background-toggle');
 const backgroundQuick=element<HTMLButtonElement>('background-quick');
 const backgroundInfo=element('background-info'), backgroundStatus=element('background-status');
@@ -49,12 +49,12 @@ element('beads').onpointermove=event=>{
 };
 element('beads').onpointercancel=()=>{beadPointer=undefined;rosarySvg.style.transform='';};
 let beadIndex=0, backgroundOn=false, backgroundVersion=0;
-let backgroundFile='room.wav';
-const voice=new Audio(), ambient=new Audio(new URL('audio/room.wav',location.href).href);
-voice.preload='none';ambient.preload='none';ambient.loop=true;
-voice.volume=Number(voiceVolume.value);ambient.volume=0;
-let waiting:number|undefined, deadline=0, playVersion=0, active=false, loaded=false, opening=false, noticeTimer=0, scene:Walkthrough|undefined;
-let audioState:'idle'|'loading'|'playing'|'paused'|'waiting'|'error'='idle';
+const shuffle=new ShuffleQueue(carols.length);
+let currentTrack=shuffle.next();
+const failedTracks=new Set<number>();
+const ambient=new Audio(new URL(carols[currentTrack].file,location.href).href);
+ambient.preload='metadata';ambient.loop=false;ambient.volume=0;
+let active=false, loaded=false, opening=false, noticeTimer=0, scene:Walkthrough|undefined;
 const qa=new URLSearchParams(location.search).has('qa');
 let selected:SceneId='bariloche';
 let retryWalk=false;
@@ -81,7 +81,7 @@ function actionSound(name:string){
   const file=name==='room'?'door':name;
   let audio=actionSounds.get(file);
   if(!audio){audio=new Audio(new URL('audio/'+file+'.wav',location.href).href);actionSounds.set(file,audio);}
-  audio.volume=volume*(audioState==='playing'?.3:1);audio.currentTime=0;
+  audio.volume=volume;audio.currentTime=0;
   void audio.play().catch(()=>{});
 }
 function stopActionSounds(){for(const sound of actionSounds.values()){sound.pause();sound.currentTime=0;}}
@@ -93,7 +93,7 @@ function stopChoir(){
 }
 function exitGame(){stopChoir();syncBackground();choirOpen.focus();}
 async function playChoir(conduct:boolean){
-  stopChoir();resetVoice();
+  stopChoir();
   if(!Number(ambientVolume.value))ambientVolume.value='0.5';
   const version=++choirVersion;
   choirOn=true;scene?.setChoirPlaying(true);syncBackground();
@@ -231,98 +231,83 @@ element('catalog-open').onclick=()=>{if(!opening){scene?.mode('catalog');catalog
 element('catalog-close').onclick=()=>catalog.close();
 catalog.onclose=()=>{if(!opening)scene?.mode(active?'walk':'welcome');};
 
-for(const phrase of phrases){const option=new Option(phrase.text,phrase.id);option.lang=phrase.lang;select.add(option);}
-function current(){return phrases.find(p=>p.id===select.value)??phrases[0];}
-function updateAudio(){
-  translation.textContent=current().meaning;
-  const elapsed=voice.currentTime||0, duration=Number.isFinite(voice.duration)?voice.duration:0;
-  progress.value=duration?Math.min(1,elapsed/duration):0;
-  play.textContent=audioState==='playing'?'일시정지':audioState==='loading'?'불러오는 중':'재생';
-  play.disabled=audioState==='loading';
-  const remaining=Math.max(0,Math.ceil(duration-elapsed));
-  const states={idle:'정지',loading:'불러오는 중…',playing:'재생 중 · 남은 시간 '+remaining+'초',paused:'일시정지',waiting:'다음 재생까지 '+Math.max(0,Math.ceil((deadline-performance.now())/1000))+'초',error:audioProblem};
-  audioStatus.textContent=states[audioState];
+function formatTime(seconds:number){
+  return Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0');
 }
-function resetVoice(){
-  playVersion++;
-  clearTimeout(waiting);waiting=undefined;deadline=0;
-  voice.pause();if(voice.hasAttribute('src'))voice.currentTime=0;
-  audioState='idle';updateAudio();
+function updateMusicProgress(){
+  const duration=Number.isFinite(ambient.duration)?ambient.duration:carols[currentTrack].duration;
+  musicProgress.value=duration?ambient.currentTime/duration:0;
+  musicPosition.textContent=formatTime(ambient.currentTime)+' / '+formatTime(duration);
 }
-function pauseVoice(){
-  if(audioState==='waiting'||audioState==='loading'){resetVoice();return;}
-  if(audioState==='playing'){voice.pause();audioState='paused';updateAudio();}
+for(const track of carols){
+  const row=document.createElement('li');
+  const title=document.createElement('strong');title.textContent=track.title;
+  const credit=document.createElement('p');credit.textContent=track.artist;
+  const source=document.createElement('a');source.href=track.source;source.textContent='원본 및 출처';source.target='_blank';source.rel='noopener noreferrer';
+  const license=document.createElement('a');license.href=track.licenseUrl;license.textContent=track.license;license.target='_blank';license.rel='noopener noreferrer';
+  const changes=document.createElement('small');changes.textContent=track.changes;
+  row.append(title,credit,source,document.createTextNode(' · '),license,changes);element('music-credits').append(row);
 }
-async function startVoice(resume=false){
-  clearTimeout(waiting);waiting=undefined;
-  const version=++playVersion;
-  if(!resume){
-    voice.src=new URL('audio/'+current().id+'.wav',location.href).href;
+function nextBackground(){
+  for(let attempt=0;attempt<carols.length*2;attempt++){
+    currentTrack=shuffle.next();
+    if(!failedTracks.has(currentTrack)){
+      ambient.src=new URL(carols[currentTrack].file,location.href).href;
+      updateMusicProgress();syncBackground();return;
+    }
   }
-  stopChoir();audioState='loading';syncBackground();updateAudio();
-  try{await voice.play();if(version!==playVersion)return;audioState='playing';}
-  catch{if(version!==playVersion)return;audioState='error';audioProblem='음성을 불러오지 못했습니다. 다시 재생해 주세요.';}
-  updateAudio();syncBackground();
+  backgroundOn=false;syncBackground();announce('캐럴을 불러오지 못했습니다. 배경음 켜기로 다시 시도해 주세요.');
 }
-voice.addEventListener('ended',()=>{
-  if(audioState!=='playing')return;
-  if(!repeat.checked){resetVoice();syncBackground();return;}
-  audioState='waiting';deadline=performance.now()+Number(gap.value)*1000;
-  waiting=window.setTimeout(()=>{if(!document.hidden&&repeat.checked)void startVoice();else {resetVoice();syncBackground();}},Number(gap.value)*1000);
-  updateAudio();
-});
-voice.addEventListener('timeupdate',updateAudio);
-window.setInterval(()=>{if(audioState==='waiting')updateAudio();},250);
-play.onclick=()=>{if(audioState==='playing'){pauseVoice();syncBackground();}else void startVoice(audioState==='paused');};
-stop.onclick=select.onchange=()=>{resetVoice();syncBackground();};
-repeat.onchange=()=>{if(!repeat.checked&&audioState==='waiting'){resetVoice();syncBackground();}};
-gap.onchange=()=>{if(audioState==='waiting'){resetVoice();syncBackground();}};
-voiceVolume.oninput=()=>{voice.volume=Number(voiceVolume.value);};
+function backgroundError(){
+  if(!backgroundOn)return;
+  failedTracks.add(currentTrack);
+  if(failedTracks.size>=carols.length){backgroundOn=false;syncBackground();announce('캐럴을 불러오지 못했습니다. 배경음 켜기로 다시 시도해 주세요.');return;}
+  nextBackground();
+}
 function syncBackground(){
   const version=++backgroundVersion;
   backgroundToggle.textContent=backgroundOn?'배경 소리 끄기':'배경 소리 켜기';
   backgroundQuick.textContent=backgroundOn?'♪ 배경음 끄기':'♪ 배경음 켜기';
   backgroundQuick.setAttribute('aria-pressed',String(backgroundOn));
   ambient.volume=Number(ambientVolume.value);
-  const organ=backgroundTrack.value==='organ';
-  backgroundInfo.textContent=organ?'본당의 여운 · 1분 20초 · 반복 재생 · 이 시제품을 위해 제작한 합성 오르간 연주':'조용한 본당 · 반복 재생 · 시제품 공간음';
-  const file=organ?'organ.mp3':'room.wav';
-  if(file!==backgroundFile){
-    backgroundFile=file;
-    ambient.src=new URL('audio/'+file,location.href).href;
-  }
-  ambient.loop=true;
-  const voiceBusy=audioState==='loading'||audioState==='playing'||audioState==='waiting';
-  if(!backgroundOn||!ambient.volume||document.hidden||confessional.open||releasing||opening||voiceBusy||choirOn){
+  const track=carols[currentTrack];
+  musicTitle.textContent=track.title;
+  backgroundInfo.textContent='크리스마스 캐럴 10곡 · 무작위 연속 재생';
+  if(!backgroundOn||!ambient.volume||document.hidden||confessional.open||releasing||opening||choirOn){
     ambient.pause();
-    backgroundStatus.textContent=backgroundOn&&voiceBusy?'전례 음성 재생 중에는 배경 소리를 쉽니다.':'배경 소리 꺼짐';
+    backgroundStatus.textContent=backgroundOn?'다시 돌아오면 캐럴이 이어집니다.':'배경 소리 꺼짐';
     return;
   }
   void ambient.play().then(()=>{
     if(version===backgroundVersion)backgroundStatus.textContent='배경 소리 재생 중';
-  }).catch(()=>{
+  }).catch((error:DOMException)=>{
     if(version!==backgroundVersion)return;
+    if(error.name!=='NotAllowedError'){backgroundError();return;}
     backgroundOn=false;
     syncBackground();
-    announce('배경 소리를 재생하지 못했습니다. 음성 메뉴에서 다시 켜 주세요.');
+    announce('배경 소리를 재생하지 못했습니다. 음악 메뉴에서 다시 켜 주세요.');
   });
 }
-backgroundTrack.onchange=syncBackground;
+
 backgroundQuick.onclick=backgroundToggle.onclick=()=>{
   backgroundOn=!backgroundOn;
   if(backgroundOn&&Number(ambientVolume.value)===0)ambientVolume.value='0.5';
+  if(backgroundOn){failedTracks.clear();if(ambient.error){nextBackground();return;}}
   syncBackground();
 };
 ambientVolume.oninput=()=>{
   backgroundOn=Number(ambientVolume.value)>0;
   syncBackground();
 };
-ambient.onerror=()=>{if(backgroundOn){backgroundOn=false;syncBackground();announce('배경 소리를 불러오지 못했습니다. 배경음 켜기를 눌러 다시 시도해 주세요.');}};
+ambient.onerror=backgroundError;
+ambient.onended=nextBackground;
+ambient.ontimeupdate=updateMusicProgress;
+element('music-next').onclick=()=>{failedTracks.clear();nextBackground();};
 element('audio-open').onclick=()=>{scene?.mode('audio');panel.showModal();};
 element('audio-close').onclick=()=>panel.close();
 panel.onclose=()=>{scene?.mode(active?'walk':'welcome');};
-document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseVoice();stopChoir();stopActionSounds();scene?.skipEffect();}syncBackground();});
-window.addEventListener('pagehide',()=>{thought.value='';stopChoir();stopActionSounds();scene?.skipEffect();resetVoice();backgroundOn=false;syncBackground();if(confessional.open)confessional.close();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){stopChoir();stopActionSounds();scene?.skipEffect();}syncBackground();});
+window.addEventListener('pagehide',()=>{thought.value='';stopChoir();stopActionSounds();scene?.skipEffect();backgroundOn=false;syncBackground();if(confessional.open)confessional.close();});
 window.addEventListener('pageshow',()=>{thought.value='';if(confessional.open)confessional.close();});
 
 function announce(message:string,duration=3000){
@@ -331,7 +316,7 @@ function announce(message:string,duration=3000){
 }
 function enterRoom(){
   if(confessional.open||!active)return;
-  stopChoir();resetVoice();scene?.onSound('room');scene?.mode('room');thought.value='';confessional.showModal();syncBackground();thought.focus();
+  stopChoir();scene?.onSound('room');scene?.mode('room');thought.value='';confessional.showModal();syncBackground();thought.focus();
 }
 function leaveRoom(){
   thought.value='';
@@ -371,7 +356,7 @@ function updateWalkControls(){
   candle.toggleAttribute('disabled',!!scene?.effect);
   if(qa){
     const status=element('qa-status');status.hidden=false;
-    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,audioState,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
+    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
   }
   const locations=scene?.hotspots()??[];
   for(const button of hotspots.querySelectorAll<HTMLButtonElement>('button'))button.hidden=true;
@@ -381,6 +366,7 @@ function updateWalkControls(){
       button=document.createElement('button');button.type='button';button.dataset.action=location.id;
       button.onclick=()=>{
         if(location.id==='choir')choirOpen.click();
+        else if(location.id==='tree')scene?.visit('tree');
         else element(location.id).click();
       };
       hotspots.append(button);
@@ -409,9 +395,10 @@ window.addEventListener('keydown',event=>{
 candle.onclick=()=>scene?.toggleCandle(updateWalkControls);
 pointsOpen.onclick=()=>{scene?.mode('points');points.showModal();};
 element('points-close').onclick=()=>points.close();
-let nextPoint:'altar'|'glass'|undefined;
+let nextPoint:'altar'|'glass'|'tree'|undefined;
 element('point-altar').onclick=()=>{nextPoint='altar';points.close();};
 element('point-glass').onclick=()=>{nextPoint='glass';points.close();};
+element('point-tree').onclick=()=>{nextPoint='tree';points.close();};
 points.onclose=()=>{
   scene?.mode('walk');
   if(nextPoint)scene?.visit(nextPoint);
@@ -441,7 +428,7 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
   if(opening)return;
   if(!scene){announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);return;}
   opening=true;retry.hidden=true;enter.disabled=enterSound.disabled=true;
-  stopChoir();stopActionSounds();resetVoice();ambient.pause();scene.mode('loading');announce('공간을 불러오는 중…',0);
+  stopChoir();stopActionSounds();ambient.pause();scene.mode('loading');announce('공간을 불러오는 중…',0);
   try{
     if(await scene.load(id,url)){
       selected=id;loaded=true;refreshSceneTitle();
@@ -459,10 +446,10 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
 try{scene=new Walkthrough(viewport,announce);scene.onSound=actionSound;reducedMotion.checked=scene.motionReduced;}
 catch{announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);}
 function enterCathedral(withSound:boolean){
-  resetVoice();
+
   backgroundOn=withSound;effectVolume.value=withSound?'0.25':'0';
   if(withSound){
-    backgroundTrack.value='organ';
+    failedTracks.clear();
     if(!Number(ambientVolume.value))ambientVolume.value='0.5';
     if(ambient.ended)ambient.currentTime=0;
   }
@@ -474,18 +461,18 @@ function enterCathedral(withSound:boolean){
 }
 enter.onclick=()=>enterCathedral(true);
 enterSound.onclick=()=>enterCathedral(false);
-exit.onclick=()=>{stopChoir();stopActionSounds();resetVoice();backgroundOn=false;syncBackground();present(false);enter.focus();};
+exit.onclick=()=>{stopChoir();stopActionSounds();backgroundOn=false;syncBackground();present(false);enter.focus();};
 window.setInterval(updateWalkControls,150);
 refreshSceneTitle();
 if(scene)void switchScene('bariloche',false);
-updateAudio();
+updateMusicProgress();
 syncBackground();
 
 if(qa){
   Object.assign(window,{
     inapeaceQA:{
       switchScene,
-      status:()=>({scene:selected,position:scene?.position.toArray(),seated:scene?.seated,active,loaded,opening,audioState,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,room:confessional.open,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,triangles:scene?.triangleCount})
+      status:()=>({scene:selected,position:scene?.position.toArray(),seated:scene?.seated,active,loaded,opening,currentCarol:carols[currentTrack].id,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,room:confessional.open,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,triangles:scene?.triangleCount})
     }
   });
 }

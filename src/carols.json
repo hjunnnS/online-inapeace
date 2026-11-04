@@ -1,0 +1,122 @@
+[
+  {
+    "id": "silent-night",
+    "title": "고요한 밤 거룩한 밤",
+    "file": "audio/carols/silent-night.mp3",
+    "duration": 162.12,
+    "artist": "Composition: Franz Xaver Gruber; Performance: United States Air Force Band of the Rockies, Concert Band; Recording: United States Air Force",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:Silent_Nights_-_Concert_Band_-_United_States_Air_Force_Band_of_the_Rockies.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/7/7e/Silent_Nights_-_Concert_Band_-_United_States_Air_Force_Band_of_the_Rockies.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "first-noel",
+    "title": "저 들 밖에 한밤중에",
+    "file": "audio/carols/first-noel.mp3",
+    "duration": 217.32,
+    "artist": "Composition: SSgt Tim Davis and SrA David Duneman, traditional; Mixing and Mastering: SSgt Tim Davis; Performance: United States Air Force Band of Mid-America, Starlifter and Roots in Blue",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:The_First_Noel_(2020)_-_Starlifter_and_Roots_in_Blue_-_United_States_Air_Force_Band_of_Mid-America.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/2/23/The_First_Noel_%282020%29_-_Starlifter_and_Roots_in_Blue_-_United_States_Air_Force_Band_of_Mid-America.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "joy-to-the-world",
+    "title": "기쁘다 구주 오셨네",
+    "file": "audio/carols/joy-to-the-world.mp3",
+    "duration": 268.25,
+    "artist": "Composition: Lowell Mason; Arrangement: Dennis Hoffmann and Frank Pappajohn; Performance: United States Air Force Band, Diplomats; Recording: United States Air Force",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:Joy_to_the_World_-_Diplomats_-_United_States_Air_Force_Band.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/5/51/Joy_to_the_World_-_Diplomats_-_United_States_Air_Force_Band.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "emmanuel",
+    "title": "곧 오소서 임마누엘",
+    "file": "audio/carols/emmanuel.mp3",
+    "duration": 279.72,
+    "artist": "Composition: traditional; Arrangement: Mitchell Morton; Performance: United States Air Force Band, Diplomats; Recording: United States Air Force",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:O_Come,_O_Come_Emmanuel_-_Diplomats_-_United_States_Air_Force_Band.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/3/3a/O_Come%2C_O_Come_Emmanuel_-_Diplomats_-_United_States_Air_Force_Band.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "deck-the-halls",
+    "title": "아름답게 장식하세",
+    "file": "audio/carols/deck-the-halls.mp3",
+    "duration": 247.46,
+    "artist": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 2.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/2.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Deck_the_Halls_A_(Kevin_MacLeod)_(ISRC_USUAN1100263).oga",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/d/d9/Deck_the_Halls_A_%28Kevin_MacLeod%29_%28ISRC_USUAN1100263%29.oga",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "angels",
+    "title": "천사들의 노래가",
+    "file": "audio/carols/angels.mp3",
+    "duration": 145.5,
+    "artist": "Kevin MacLeod (incompetech.com)",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Angels_We_Have_Heard_on_High_(ISRC_USUAN1100329).mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/2/2f/Angels_We_Have_Heard_on_High_%28ISRC_USUAN1100329%29.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "we-wish",
+    "title": "We Wish You a Merry Christmas",
+    "file": "audio/carols/we-wish.mp3",
+    "duration": 54.44,
+    "artist": "Jason Shaw · music by audionautix.com",
+    "license": "CC BY 3.0",
+    "licenseUrl": "https://creativecommons.org/licenses/by/3.0",
+    "source": "https://commons.wikimedia.org/wiki/File:Audionautix-com-ccby-wewishyouamerryxmas.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/c/cd/Audionautix-com-ccby-wewishyouamerryxmas.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "holy-night",
+    "title": "오 거룩한 밤",
+    "file": "audio/carols/holy-night.mp3",
+    "duration": 248.61,
+    "artist": "Composition: Adolphe Adam; Lyrics: John Dwight; Arrangement: MSgt Steve Shafer; Performance: United States Air Force Band of the Golden West, Concert Band; Recording: United States Air Force",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:Cantique_de_No%C3%ABl_(O_Holy_Night)_-_Concert_Band_-_United_States_Air_Force_Band_of_the_Golden_West.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/a/a3/Cantique_de_No%C3%ABl_%28O_Holy_Night%29_-_Concert_Band_-_United_States_Air_Force_Band_of_the_Golden_West.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "midnight-clear",
+    "title": "그 맑고 환한 밤중에",
+    "file": "audio/carols/midnight-clear.mp3",
+    "duration": 359.55,
+    "artist": "Composition: Richard S. Willis; Arrangement: Frank Pappajohn; Performance: United States Air Force Band, Diplomats; Recording: United States Air Force",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:It_Came_Upon_the_Midnight_Clear_-_Diplomats_-_United_States_Air_Force_Band.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/6/6f/It_Came_Upon_the_Midnight_Clear_-_Diplomats_-_United_States_Air_Force_Band.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  },
+  {
+    "id": "wassailing",
+    "title": "Here We Come A-Wassailing",
+    "file": "audio/carols/wassailing.mp3",
+    "duration": 277.68,
+    "artist": "Composition: traditional; Arrangement: Michael Davis; Performance: United States Air Force Band, Singing Sergeants; Recording: United States Air Force Band",
+    "license": "Public domain",
+    "licenseUrl": "https://commons.wikimedia.org/wiki/Template:PD-USGov-Military-Air_Force",
+    "source": "https://commons.wikimedia.org/wiki/File:Here_We_Come_A%27Wassailing_-_Singing_Sergeants_-_United_States_Air_Force_Band.mp3",
+    "original": "https://upload.wikimedia.org/wikipedia/commons/1/1e/Here_We_Come_A%27Wassailing_-_Singing_Sergeants_-_United_States_Air_Force_Band.mp3",
+    "changes": "음량 정규화 및 96kbps MP3 인코딩"
+  }
+]

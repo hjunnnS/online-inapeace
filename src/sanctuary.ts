@@ -1,6 +1,6 @@
 import * as T from 'three';
 
-// All textures and meshes in this module are drawn for this project.
+// Code-made materials and meshes; original stained-glass artwork is in stainedglass.ts.
 function texture(draw:(context:CanvasRenderingContext2D,size:number)=>void,size=256){
   const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
   const context=canvas.getContext('2d');
@@ -153,27 +153,7 @@ export function enrichMaterials(root:T.Group){
     }
   });
 }
-export function makeProjections(){
-  const group=new T.Group();
-  const map=texture((ctx,s)=>{
-    ctx.clearRect(0,0,s,s);
-    const colors=['#b35446','#315baa','#cda959','#658b94','#5b4179'];
-    for(let y=0;y<8;y++)for(let x=0;x<5;x++){
-      ctx.fillStyle=colors[(x*3+y*2)%colors.length];
-      ctx.fillRect(x*s/5+3,y*s/8+3,s/5-6,s/8-6);
-    }
-  });
-  const material=new T.MeshBasicMaterial({map,transparent:true,opacity:.24,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide});
-  for(const z of [-7.8,-2.6,2.6,7.8]){
-    const patch=mesh(group,new T.PlaneGeometry(5.4,3.8),material,[2,.04,z]);
-    patch.rotation.x=-Math.PI/2;patch.rotation.z=.32;
-  }
-  const shaftMaterial=new T.MeshBasicMaterial({color:'#e7d7b4',transparent:true,opacity:.035,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide});
-  for(const z of [-7.8,2.6]){
-    const shaft=mesh(group,new T.ConeGeometry(1.1,8.5,16,1,true),shaftMaterial,[5.4,4.5,z]);shaft.rotation.z=-.66;
-  }
-  return {group,material,shaftMaterial};
-}
+export { makeProjections } from './stainedglass';
 export function markerRing(){
   const ring=new T.Mesh(new T.RingGeometry(.36,.4,48),new T.MeshBasicMaterial({color:'#e8c68b',transparent:true,opacity:.7,depthWrite:false,side:T.DoubleSide}));
   ring.rotation.x=-Math.PI/2;ring.position.y=.055;return ring;
@@ -217,4 +197,61 @@ export function makeChoir(){
   const spotlight=new T.SpotLight('#ffe1a1',35,12,.35,.65,1.4);spotlight.position.set(-1,7,-9);
   spotlight.target.position.set(0,1,-11);spotlight.visible=false;group.add(spotlight,spotlight.target);
   return {group,people,spotlight};
+}
+
+export function makeChristmasTree(){
+  const group=new T.Group();group.position.set(-6.15,0,15.8);
+  const bark=new T.MeshStandardMaterial({color:'#59412a',roughness:1});
+  const greens=['#173b2e','#204d38','#285a40'].map(color=>new T.MeshStandardMaterial({color,roughness:.96}));
+  const gold=new T.MeshStandardMaterial({color:'#cba34f',metalness:.75,roughness:.26});
+  mesh(group,new T.CylinderGeometry(.2,.3,1.2,16),bark,[0,.6,0]);
+  mesh(group,new T.CylinderGeometry(2.1,2.16,.08,48),new T.MeshStandardMaterial({color:'#772d35',roughness:1}),[0,.06,0]);
+  for(let tier=0;tier<8;tier++){
+    const radius=2.05-tier*.23;
+    const branch=mesh(group,new T.ConeGeometry(radius,1.8,40),greens[tier%3],[0,1.45+tier*.68,0]);
+    branch.rotation.y=tier*.36;
+    for(let side=0;side<7;side++){
+      const angle=side*Math.PI*2/7+tier*.55;
+      const tip=mesh(group,new T.ConeGeometry(radius*.37,1.1,9),greens[(tier+side)%3],[Math.cos(angle)*radius*.69,1+tier*.68,Math.sin(angle)*radius*.69]);
+      tip.rotation.z=Math.sin(angle)*.2;tip.rotation.x=Math.cos(angle)*.2;
+    }
+  }
+  const ballGeometry=new T.SphereGeometry(.105,12,10),dummy=new T.Object3D();
+  for(const [color,offset] of [['#b6353f',0],['#d8b46a',1],['#d9d9c9',2]] as const){
+    const balls=new T.InstancedMesh(ballGeometry,new T.MeshStandardMaterial({color,metalness:.7,roughness:.25}),22);
+    for(let i=0;i<22;i++){
+      const height=.95+(i/22)*4.9,angle=i*2.39996+offset*2.1;
+      const radius=2.08-(height-.8)*.27;
+      dummy.position.set(Math.cos(angle)*radius,height,Math.sin(angle)*radius);dummy.scale.setScalar(.85+(i%3)*.18);dummy.updateMatrix();balls.setMatrixAt(i,dummy.matrix);
+    }
+    group.add(balls);
+  }
+  const wirePoints:T.Vector3[]=[];
+  for(let i=0;i<=160;i++){
+    const y=.9+i/160*5.4,angle=i/160*Math.PI*12,radius=2.08-(y-.8)*.29;
+    wirePoints.push(new T.Vector3(Math.cos(angle)*radius,y,Math.sin(angle)*radius));
+  }
+  mesh(group,new T.TubeGeometry(new T.CatmullRomCurve3(wirePoints),180,.012,5,false),gold,[0,0,0]);
+  const bulbs=new T.InstancedMesh(new T.SphereGeometry(.037,7,6),new T.MeshBasicMaterial({color:'#ffe3a4'}),100);
+  for(let i=0;i<100;i++){dummy.position.copy(wirePoints[Math.floor(i/100*160)]);dummy.scale.setScalar(1);dummy.updateMatrix();bulbs.setMatrixAt(i,dummy.matrix);}
+  group.add(bulbs);
+  const starShape=new T.Shape();
+  for(let i=0;i<10;i++){
+    const angle=Math.PI/2+i*Math.PI/5,radius=i%2?.18:.42;
+    if(i===0)starShape.moveTo(Math.cos(angle)*radius,Math.sin(angle)*radius);
+    else starShape.lineTo(Math.cos(angle)*radius,Math.sin(angle)*radius);
+  }
+  starShape.closePath();
+  const star=mesh(group,new T.ExtrudeGeometry(starShape,{depth:.07,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.025,bevelThickness:.025}),gold,[0,6.85,0]);
+  star.rotation.y=.5;
+  const light=new T.PointLight('#ffd18c',12,8,1.4);light.position.set(0,3,1);group.add(light);
+  const wrapping=['#8b303e','#b49760','#254f45','#eee0ba'];
+  for(let i=0;i<4;i++){
+    const angle=i*Math.PI*.52+.3,x=Math.cos(angle)*1.65,z=Math.sin(angle)*1.65;
+    const material=new T.MeshStandardMaterial({color:wrapping[i],roughness:.65});
+    mesh(group,new T.BoxGeometry(.58,.4+i*.08,.55),material,[x,.25+i*.04,z]);
+    mesh(group,new T.BoxGeometry(.09,.43+i*.08,.57),gold,[x,.25+i*.04,z]);
+    mesh(group,new T.BoxGeometry(.6,.04,.09),gold,[x,.47+i*.08,z]);
+  }
+  return {group,bulbs};
 }

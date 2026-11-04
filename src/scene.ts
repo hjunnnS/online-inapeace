@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { disposeObject as unload } from './resources';
-import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
+import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, makeChristmasTree, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export type SceneId = string;
@@ -53,6 +53,7 @@ function makePrivateRoom(){
 const barilochePoints = {
   altar: { stop: new T.Vector3(0, 0, -10.7), view: new T.Vector3(0, 2.9, -16) },
   glass: { stop: new T.Vector3(6.3, 0, -5.6), view: new T.Vector3(8.65, 5.95, -7.8) },
+  tree: { stop: new T.Vector3(1.4, 0, 17.1), view: new T.Vector3(-6.15,3.7,15.8) },
 };
 const candleStop = new T.Vector3(6.15, 0, 14.5);
 const lighting = {
@@ -90,6 +91,7 @@ export class Walkthrough {
   private lightPreset:LightPreset='day';
   private reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
   private particles=new Particles();
+  private christmasTree?:ReturnType<typeof makeChristmasTree>;
   private choir?:ReturnType<typeof makeChoir>;
   private backgroundPeople:{avatar:ReturnType<typeof makeAvatar>;seated:boolean;phase:number;taper?:Taper}[]=[];
   private choirPlaying=false;
@@ -139,6 +141,8 @@ export class Walkthrough {
   private frames:number[]=[];
   onSound:(name:'candle'|'sit'|'room'|'release')=>void=()=>{};
 
+  get worshipperCount(){return this.backgroundPeople.length;}
+  get treePresent(){return !!this.christmasTree;}
   get veilOn(){return this.avatar.veil.visible;}
   get holdingCandle(){return !!this.carried;}
   get placedCandles(){return this.placed.length;}
@@ -188,6 +192,7 @@ export class Walkthrough {
       {id:'candle',label:this.carried?'촛불 놓기':'촛불 켜기',position:candleStop},
       {id:'confess',label:'고해소',position:this.place!.door},
       {id:'choir',label:'성가대 감상',position:barilochePoints.altar.stop},
+      {id:'tree',label:'크리스마스 트리',position:barilochePoints.tree.stop},
       {id:'sit',label:this.seated?'일어나기':'앉기',position:[...this.place!.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0]},
     ];
     return spots.filter(spot=>spot.position.distanceTo(this.position)<5).flatMap(spot=>{
@@ -207,11 +212,7 @@ export class Walkthrough {
     this.daylight.color.lerp(new T.Color(settings.sun),blend);
     this.daylight.intensity=T.MathUtils.lerp(this.daylight.intensity,settings.direct,blend);
     this.altarLight.intensity=T.MathUtils.lerp(this.altarLight.intensity,settings.altar,blend);
-    if(this.projections){
-      const target=preset==='night'?0:preset==='dusk'?.12:.28;
-      this.projections.material.opacity=T.MathUtils.lerp(this.projections.material.opacity,target,blend);
-      this.projections.shaftMaterial.opacity=this.reducedMotion||preset==='night'?0:.025;
-    }
+    this.projections?.setLight(preset,blend);
   }
   private candle?: ReturnType<typeof makeCandleCorner>;
   private framing?: T.Vector3;
@@ -237,7 +238,7 @@ export class Walkthrough {
   visit(point:keyof typeof barilochePoints){
     if(!this.candle)return;
     const {stop,view}=barilochePoints[point];
-    this.go(stop,()=>{this.framing=view;this.notice(point==='altar'?'제대 앞에 도착했습니다.':'스테인드글라스 가까이에 도착했습니다.');});
+    this.go(stop,()=>{this.framing=view;this.notice({altar:'제대 앞에 도착했습니다.',glass:'스테인드글라스 가까이에 도착했습니다.',tree:'본당 뒤편의 크리스마스 트리입니다.'}[point]);});
   }
 
   setQuiet(quiet:boolean){
@@ -296,16 +297,17 @@ export class Walkthrough {
       enrichMaterials(next.root);
       this.altarDecor=makeAltarDecor();next.root.add(this.altarDecor.group);
       this.choir=makeChoir();next.root.add(this.choir.group);
-      const colors=['#68576d','#6a6d50','#435d72','#755348','#9c8f77','#594e62'];
-      for(let i=0;i<6;i++){
-        const avatar=makeAvatar(colors[i]);
-        const seated=i>=2;
-        if(seated){avatar.group.position.copy(next.seats[(i*7)%next.seats.length]);avatar.rig.scale.y=.78;avatar.rig.position.z=.77;avatar.legs.forEach(leg=>leg.rotation.x=-1.2);}
-        else avatar.group.position.set(i%2?6.6:-6.6,0,8-i*7);
-        avatar.group.scale.setScalar(.94);next.root.add(avatar.group);
-        let taper:Taper|undefined;
-        if(i===0){taper=makeTaper();avatar.hand.add(taper.root);taper.root.rotation.x=-.9;avatar.arms[1].rotation.x=.9;}
-        this.backgroundPeople.push({avatar,seated,phase:i,taper});
+      this.christmasTree=makeChristmasTree();next.root.add(this.christmasTree.group);
+      next.blockers.push({x:-6.15,z:15.8,width:4.15,depth:4.15});
+      const colors=['#68576d','#6a6d50','#435d72','#755348','#9c8f77','#594e62','#8f5962','#5e766e','#52567b','#8b7453'];
+      for(let i=0;i<10;i++){
+        const avatar=makeAvatar(colors[i]),seated=i>=4;
+        if(seated){
+          avatar.group.position.copy(next.seats[((i-4)*3+3)%next.seats.length]);
+          avatar.rig.scale.y=.78;avatar.rig.position.z=.77;avatar.legs.forEach(leg=>leg.rotation.x=-1.2);
+        }else avatar.group.position.set(i%2?6.5:-6.5,0,5.5-Math.floor(i/2)*8);
+        avatar.group.scale.setScalar(.94);avatar.group.rotation.y=0;next.root.add(avatar.group);
+        this.backgroundPeople.push({avatar,seated,phase:i});
       }
       next.root.add(this.candle.group);
       next.blockers.push({x:6.15,z:13.25,width:1.9,depth:.8});
@@ -314,7 +316,7 @@ export class Walkthrough {
         const ring=markerRing();ring.position.x=target.x;ring.position.z=target.z;next.root.add(ring);this.markers.push(ring);
       }
     }else{
-      this.choir=undefined;this.altarDecor=undefined;this.projections=undefined;
+      this.christmasTree=undefined;this.choir=undefined;this.altarDecor=undefined;this.projections=undefined;
     }
     this.setLighting('day');
     this.altarLight.visible=!!this.candle;
@@ -416,7 +418,8 @@ export class Walkthrough {
   sit(){
     if(this.blocked||!this.place)return;
     if(this.seated){this.seated=false;this.cinematic=false;this.framing=undefined;this.notice('일어났습니다.');return;}
-    const nearest=[...this.place.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
+    const nearest=this.place.seats.filter(seat=>!this.backgroundPeople.some(person=>person.seated&&person.avatar.group.position.distanceToSquared(seat)<.1)).sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
+    if(!nearest){this.notice('빈 좌석이 없습니다.');return;}
     this.go(nearest,()=>{this.seated=true;if(this.candle){this.cinematic=true;this.framing=barilochePoints.altar.view;}this.onSound('sit');this.avatar.group.rotation.y=0;this.notice('잠시 앉아 쉬어가세요.');});
   }
   walkToDoor(enter:()=>void){if(this.place)this.go(this.place.door,enter);}
@@ -436,6 +439,7 @@ export class Walkthrough {
       if(this.ceremony.elapsed>=this.ceremony.duration){const done=this.ceremony.done;this.ceremony=undefined;done?.();}
     }
     const seconds=now/1000;
+    this.projections?.tick(seconds,this.reducedMotion);
     this.conductBeat=Math.max(0,this.conductBeat-delta);
     if(this.choir){
       this.choir.people.forEach((person,i)=>{
@@ -444,14 +448,11 @@ export class Walkthrough {
       });
       for(const person of this.backgroundPeople){
         if(person.taper)flicker(person.taper,seconds,person.phase,this.reducedMotion);
-        if(person.seated||this.view==='room'||this.view==='loading'||person.avatar.group.position.distanceTo(this.position)<1.2)continue;
-        const direction=person.phase%2?1:-1;
-        person.avatar.group.position.z+=delta*.45*direction;
-        if(person.avatar.group.position.z>10||person.avatar.group.position.z< -8)person.phase++;
-        person.avatar.group.rotation.y=direction>0?Math.PI:0;
-        person.avatar.legs.forEach((leg,i)=>leg.rotation.x=this.reducedMotion?0:Math.sin(seconds*4+i*Math.PI)*.25);
+        person.avatar.rig.rotation.z=this.reducedMotion?0:Math.sin(seconds*.65+person.phase)*.012;
+
       }
     }
+    if(this.christmasTree){this.christmasTree.bulbs.material.color.setScalar(this.reducedMotion?1:.92+Math.sin(seconds*.65)*.08);}
     if(this.candle){
       this.candle.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
       this.altarDecor?.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
