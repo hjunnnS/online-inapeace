@@ -1,7 +1,7 @@
 import * as T from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-export type SceneId = 'bariloche' | 'test-a' | 'test-b';
+export type SceneId = string;
 type Bounds = [number, number, number, number];
 type Blocker = {x:number; z:number; width:number; depth:number};
 type Place = {root:T.Group; bounds:Bounds; blockers:Blocker[]; seats:T.Vector3[]; door:T.Vector3; spawn:T.Vector3};

@@ -17,3 +17,7 @@ Node.js 24에서 `npm ci` 후 `npm run dev`. `npm run build`는 TypeScript 검�
 ## 검수 상태
 
 기술 검수는 최종 빌드에서 Chrome과 WebKit으로 진행했다. 실제 라틴어 청취 승인과 3~5명 분위기 관찰, M1 기준 Windows/Iris Xe 실측은 검수 항목으로 남아 있다. 관련 이슈는 [음원 #22](https://github.com/hjunnnS/online-inapeace/issues/22)와 [통합 검수 #29](https://github.com/hjunnnS/online-inapeace/issues/29)다.
+
+## M3 성당 컬렉션
+
+성당 둘러보기에서 열 곳의 이름·도시·미리보기·참고 자료를 볼 수 있다. 목록의 미리보기는 같은 GLB를 브라우저에서 렌더링해 캡처했다. 바릴로체 외 아홉 곳은 공식 건축 자료를 참고한 창작 부분 재구성으로 치수, 문양, 조각과 세부 배치를 단순화했다. 자료 사진은 번들에 포함하지 않는다. 장면별 출처는 src/cathedrals.json, 제작 방식은 scripts/collection.mjs에 있다. 장면은 기존 로더와 이동·착석·고해소·오디오를 공유한다. 첫 입장은 방문자 계정 없이 동작한다.

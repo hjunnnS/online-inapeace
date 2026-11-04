@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { collection } from './collection.mjs';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 import { writeFile, mkdir } from 'node:fs/promises';
@@ -167,7 +168,7 @@ function batchMeshes(root){
   }
 }
 await mkdir('public/scenes',{recursive:true});
-for(const [id,group] of [['bariloche',cathedral()],['test-a',fixture('#746252')],['test-b',fixture('#526b68')]]){
+for(const [id,group] of [['bariloche',cathedral()],['test-a',fixture('#746252')],['test-b',fixture('#526b68')],...collection({box,marker,blocker,pew,rib,material,oak,dark,brass,glass})]){
   batchMeshes(group);
   const glb=await new GLTFExporter().parseAsync(group,{binary:true});
   await writeFile('public/scenes/'+id+'.glb',Buffer.from(glb));

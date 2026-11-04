@@ -1,6 +1,7 @@
 import './style.css';
 import { Walkthrough, type SceneId } from './scene';
 import phrases from './phrases.json';
+import cathedrals from './cathedrals.json';
 
 function element<T extends HTMLElement>(id:string){const result=document.getElementById(id);if(!result)throw new Error('Missing element '+id);return result as T;}
 const viewport=element('viewport'), welcome=element('welcome'), controls=element('controls');
@@ -20,6 +21,38 @@ const qa=new URLSearchParams(location.search).has('qa');
 let selected:SceneId='bariloche';
 let retryWalk=false;
 let audioProblem='';
+const catalog=element<HTMLDialogElement>('catalog');
+const catalogList=element('catalog-items');
+for(const [index,item] of cathedrals.entries()){
+  const row=document.createElement('li');
+  const button=document.createElement('button');
+  button.type='button';button.dataset.scene=item.id;
+  const ordinal=document.createElement('span');ordinal.className='catalog-number';ordinal.textContent=String(index+1).padStart(2,'0');
+  const copy=document.createElement('span');
+  const title=document.createElement('strong');title.textContent=item.name;
+  const detail=document.createElement('small');detail.textContent=item.region+' · '+item.detail;
+  const thumbnail=document.createElement('img');
+  thumbnail.src=new URL('previews/'+item.id+'.jpg',location.href).href;thumbnail.alt='';thumbnail.loading='lazy';thumbnail.width=480;thumbnail.height=300;
+  copy.append(title,detail);button.append(thumbnail,ordinal,copy);
+  button.onclick=()=>{catalog.close();void switchScene(item.id,true);};
+  const source=document.createElement('a');source.href=item.source;source.textContent='참고 자료';source.target='_blank';source.rel='noopener noreferrer';
+  row.append(button,source);catalogList.append(row);
+}
+function refreshSceneTitle(){
+  const index=cathedrals.findIndex(item=>item.id===selected);
+  const item=cathedrals[index];
+  element('scene-name').textContent=item?.name??'검증용 임시 공간';
+  element('region').textContent=item?.region??'전환 검증';
+  element('scene-index').textContent='CATHEDRALS · '+String(index+1).padStart(2,'0');
+  document.title='In a Peace · '+(item?.name??'전환 검증');
+  for(const button of catalogList.querySelectorAll<HTMLButtonElement>('button[data-scene]')){
+    button.setAttribute('aria-current',String(button.dataset.scene===selected));
+  }
+}
+element('catalog-open').onclick=()=>{if(!opening){scene?.mode('catalog');catalog.showModal();}};
+element('catalog-close').onclick=()=>catalog.close();
+catalog.onclose=()=>{if(!opening)scene?.mode(active?'walk':'welcome');};
+
 for(const phrase of phrases){const option=new Option(phrase.text,phrase.id);option.lang=phrase.lang;select.add(option);}
 function current(){return phrases.find(p=>p.id===select.value)??phrases[0];}
 function updateAudio(){
@@ -108,9 +141,9 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
   resetVoice();ambient.pause();scene.mode('loading');announce('공간을 불러오는 중…',0);
   try{
     if(await scene.load(id,url)){
-      selected=id;loaded=true;present(walk);
+      selected=id;loaded=true;refreshSceneTitle();present(walk);
       notice.hidden=true;
-      if(walk)announce(id==='bariloche'?'바릴로체 본당에 들어왔습니다.':'전환 검증용 임시 공간입니다.');
+      if(walk)announce((cathedrals.find(item=>item.id===id)?.name??'전환 검증용 임시 공간')+'에 들어왔습니다.');
     }
   }catch{
     present(active);retryWalk=walk;
@@ -122,10 +155,11 @@ try{scene=new Walkthrough(viewport,announce);}
 catch{announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);}
 enter.onclick=()=>{
   if(!loaded){void switchScene(selected,true);return;}
-  resetVoice();ambient.pause();present(true);announce('바릴로체 본당에 들어왔습니다.');sit.focus();
+  resetVoice();ambient.pause();present(true);announce((cathedrals.find(item=>item.id===selected)?.name??'성당')+'에 들어왔습니다.');sit.focus();
 };
 exit.onclick=()=>{resetVoice();ambient.pause();present(false);enter.focus();};
 window.setInterval(()=>{sit.textContent=scene?.seated?'일어나기':'앉기';},150);
+refreshSceneTitle();
 if(scene)void switchScene('bariloche',false);
 updateAudio();
 

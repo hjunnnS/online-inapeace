@@ -1,0 +1,12 @@
+[
+ {"id":"bariloche","name":"바릴로체 대성당","region":"바릴로체 · 아르헨티나","detail":"석재 본당과 파타고니아의 색유리","source":"https://iglesiacatedralbariloche.com/catedral.html"},
+ {"id":"paris","name":"파리 노트르담 대성당","region":"파리 · 프랑스","detail":"세 층의 벽면과 장미창","source":"https://www.notredamedeparis.fr/en/understand/architecture/interior-architecture/"},
+ {"id":"chartres","name":"샤르트르 대성당","region":"샤르트르 · 프랑스","detail":"청색 색유리와 바닥 미로","source":"https://www.cathedrale-chartres.org/en/visite/decouvrir/la-cathedrale/"},
+ {"id":"reims","name":"랭스 대성당","region":"랭스 · 프랑스","detail":"서쪽 장미창과 입구 벽의 감실","source":"https://www.cathedrale-reims.com/"},
+ {"id":"cologne","name":"쾰른 대성당","region":"쾰른 · 독일","detail":"수직으로 솟은 본당과 검은 제대","source":"https://whc.unesco.org/en/list/292/"},
+ {"id":"milan","name":"밀라노 대성당","region":"밀라노 · 이탈리아","detail":"다섯 통로와 대리석 기둥","source":"https://www.duomomilano.it/"},
+ {"id":"seville","name":"세비야 대성당","region":"세비야 · 스페인","detail":"금빛 제단화와 중앙 성가대석","source":"https://www.catedraldesevilla.es/"},
+ {"id":"burgos","name":"부르고스 대성당","region":"부르고스 · 스페인","detail":"별 모양 천장과 교차부 채광","source":"https://catedraldeburgos.es/"},
+ {"id":"vitus","name":"성 비투스 대성당","region":"프라하 · 체코","detail":"색유리와 성 바츨라프 예배실을 본뜬 측면 공간","source":"https://www.katedralasvatehovita.cz/"},
+ {"id":"stephen","name":"성 슈테판 대성당","region":"빈 · 오스트리아","detail":"석조 설교대와 바로크 제대","source":"https://www.stephanskirche.at/"}
+]
