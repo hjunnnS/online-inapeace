@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export type SceneId = string;
@@ -36,21 +37,6 @@ function decode(root:T.Group):Place {
   if(!spawn||!door||!place.seats.length)throw new Error('장면 접점이 없습니다.');
   return place;
 }
-function makeAvatar(){
-  const group=new T.Group();
-  const rig=new T.Group();group.add(rig);
-  const coat=new T.MeshStandardMaterial({color:0x52616b});
-  const head=new T.MeshStandardMaterial({color:0xb99c79});
-  const hair=new T.MeshStandardMaterial({color:0x292220});
-  function add(geometry:T.BufferGeometry, material:T.Material, x:number,y:number,z:number){
-    const mesh=new T.Mesh(geometry,material);mesh.position.set(x,y,z);rig.add(mesh);return mesh;
-  }
-  add(new T.CapsuleGeometry(.27,.53,5,12),coat,0,.9,0);
-  add(new T.SphereGeometry(.19,16,12),head,0,1.55,0);
-  add(new T.SphereGeometry(.195,16,10,0,Math.PI*2,0,Math.PI*.63),hair,0,1.59,.025);
-  const legs=[-.12,.12].map(x=>add(new T.CapsuleGeometry(.09,.35,4,8),hair,x,.33,0));
-  return {group,rig,legs};
-}
 function makePrivateRoom(){
   const group=new T.Group();group.position.set(29,0,0);group.visible=false;
   const wood=new T.MeshStandardMaterial({color:'#60452f',roughness:.9});
@@ -78,39 +64,13 @@ const barilochePoints = {
   altar: { stop: new T.Vector3(0, 0, -10.7), view: new T.Vector3(0, 2.9, -16) },
   glass: { stop: new T.Vector3(6.3, 0, -5.6), view: new T.Vector3(8.65, 5.95, -7.8) },
 };
-const candlePosition = new T.Vector3(2.45, 0, 13.25);
-const candleStop = new T.Vector3(1.45, 0, 13.25);
+const candleStop = new T.Vector3(6.15, 0, 14.5);
 const lighting = {
   day: { sky: '#ffe8c9', sun: '#ffe2b4', hemisphere: 1.85, direct: 2.4, altar: 5 },
   dusk: { sky: '#e6b28a', sun: '#ffad68', hemisphere: 1.2, direct: 1.6, altar: 12 },
   night: { sky: '#a4b8e8', sun: '#939ed0', hemisphere: .76, direct: .55, altar: 16 },
 };
 export type LightPreset = keyof typeof lighting;
-
-function makeCandle() {
-  const stand = new T.Group();
-  stand.position.copy(candlePosition);
-  const brass = new T.MeshStandardMaterial({ color: '#8b6239', metalness: .65, roughness: .36 });
-  const wax = new T.MeshStandardMaterial({ color: '#efe1bc' });
-  function add(geometry: T.BufferGeometry, material: T.Material, y: number) {
-    const mesh = new T.Mesh(geometry, material);
-    mesh.position.y = y;
-    stand.add(mesh);
-    return mesh;
-  }
-  add(new T.CylinderGeometry(.18, .28, .12, 24), brass, .06);
-  add(new T.CylinderGeometry(.065, .09, .9, 16), brass, .52);
-  add(new T.CylinderGeometry(.28, .21, .08, 24), brass, 1);
-  add(new T.CylinderGeometry(.068, .074, .23, 16), wax, 1.15);
-  const flame = add(new T.SphereGeometry(.055, 16, 12), new T.MeshBasicMaterial({ color: '#ffcb72' }), 1.33);
-  flame.scale.y = 1.85;
-  flame.visible = false;
-  const glow = new T.PointLight('#ffad54', 2, 2.4);
-  glow.position.y = 1.34;
-  glow.visible = false;
-  stand.add(glow);
-  return { stand, flame, glow };
-}
 
 export class Walkthrough {
   readonly renderer:T.WebGLRenderer;
@@ -138,34 +98,114 @@ export class Walkthrough {
   private daylight=new T.DirectionalLight('#ffe2b4');
   private altarLight=new T.PointLight('#ffc381',5,9,1.3);
   private lightPreset:LightPreset='day';
+  private reducedMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  private particles=new Particles();
+  private altarDecor?:ReturnType<typeof makeAltarDecor>;
+  private projections?:ReturnType<typeof makeProjections>;
+  private markers:T.Mesh[]=[];
+  private carried?:Taper;
+  private handLight=new T.PointLight('#ffc07c',3,3.8,1.5);
+  private placed:Taper[]=[];
+  private ceremony?:{kind:'veil'|'candle'|'release';elapsed:number;duration:number;done?:()=>void};
+  private cinematic=false;
+  private cameraTarget=new T.Vector3();
+  private cameraEye=new T.Vector3();
+  private frames:number[]=[];
+  onSound:(name:'candle'|'sit'|'room'|'release')=>void=()=>{};
+
+  get veilOn(){return this.avatar.veil.visible;}
+  get holdingCandle(){return !!this.carried;}
+  get placedCandles(){return this.placed.length;}
+  get effect(){return this.ceremony?.kind??'';}
+  get motionReduced(){return this.reducedMotion;}
+  get frameTime(){return this.frames.length?this.frames.reduce((a,b)=>a+b,0)/this.frames.length:0;}
+  setReducedMotion(reduced:boolean){this.reducedMotion=reduced;}
+
+  toggleVeil(){
+    if(this.blocked||!this.candle)return;
+    this.clear();this.framing=undefined;this.cinematic=true;
+    this.avatar.veil.visible=!this.avatar.veil.visible;
+    this.particles.start(this.position.clone().setY(.9));
+    this.ceremony={kind:'veil',elapsed:0,duration:this.reducedMotion?.25:1.5};
+    this.notice(this.veilOn?'미사포를 썼습니다.':'미사포를 벗었습니다.');
+  }
+  releaseThought(done:()=>void){
+    this.clear();this.framing=undefined;
+    if(this.reducedMotion){done();return;}
+    this.view='release';this.privateRoom.visible=false;
+    if(this.place)this.place.root.visible=true;
+    this.particles.start(new T.Vector3(0,1.3,7),true);
+    this.cameraEye.set(1.5,1.8,10);this.cameraTarget.set(0,3,7);
+    this.ceremony={kind:'release',elapsed:0,duration:3.8,done};this.onSound('release');
+  }
+  skipEffect(){
+    const done=this.ceremony?.done;
+    this.ceremony=undefined;this.particles.stop();this.cinematic=false;done?.();
+  }
+  placeCandle(){
+    if(this.blocked||!this.candle||!this.carried)return;
+    this.go(candleStop,()=>{
+      const taper=this.carried;if(!taper||!this.candle)return;
+      this.carried=undefined;this.placed.push(taper);
+      if(this.placed.length>8){const old=this.placed.shift();if(old)unload(old.root);}
+      this.candle.group.add(taper.root);
+      taper.root.position.set(-.65+(this.placed.length-1)%4*.4,1.25,-.12+Math.floor((this.placed.length-1)/4)*.24);
+      taper.root.rotation.set(0,0,0);this.handLight.visible=false;
+      this.cinematic=true;this.particles.start(this.candle.group.position.clone().setY(1.5));
+      this.ceremony={kind:'candle',elapsed:0,duration:1.4};this.onSound('candle');
+      this.notice('촛대에 초를 놓았습니다.');
+    });
+  }
+  hotspots(){
+    if(this.view!=='walk'||this.quiet||!this.candle||this.ceremony)return [];
+    const spots=[
+      {id:'candle',label:this.carried?'촛불 놓기':'촛불 켜기',position:candleStop},
+      {id:'confess',label:'고해소',position:this.place!.door},
+      {id:'altar',label:'제대 앞',position:barilochePoints.altar.stop},
+      {id:'sit',label:this.seated?'일어나기':'앉기',position:[...this.place!.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0]},
+    ];
+    return spots.filter(spot=>spot.position.distanceTo(this.position)<5).flatMap(spot=>{
+      const p=spot.position.clone().setY(.65).project(this.camera);
+      return p.z>0&&p.z<1&&Math.abs(p.x)<.9&&Math.abs(p.y)<.7?[{id:spot.id,label:spot.label,x:(p.x+1)*50,y:(1-p.y)*50}]:[];
+    });
+  }
 
   setLighting(preset:LightPreset){
     this.lightPreset=preset;
-    const settings=lighting[preset];
-    this.hemisphere.color.set(settings.sky);
-    this.hemisphere.intensity=settings.hemisphere;
-    this.daylight.color.set(settings.sun);
-    this.daylight.intensity=settings.direct;
-    this.altarLight.intensity=settings.altar;
   }
-  private candle?: ReturnType<typeof makeCandle>;
+  private updateLighting(delta:number){
+    const preset=this.view==='room'?'day':this.lightPreset;
+    const settings=lighting[preset],blend=this.reducedMotion?1:1-Math.exp(-delta*4);
+    this.hemisphere.color.lerp(new T.Color(settings.sky),blend);
+    this.hemisphere.intensity=T.MathUtils.lerp(this.hemisphere.intensity,settings.hemisphere,blend);
+    this.daylight.color.lerp(new T.Color(settings.sun),blend);
+    this.daylight.intensity=T.MathUtils.lerp(this.daylight.intensity,settings.direct,blend);
+    this.altarLight.intensity=T.MathUtils.lerp(this.altarLight.intensity,settings.altar,blend);
+    if(this.projections){
+      const target=preset==='night'?0:preset==='dusk'?.12:.28;
+      this.projections.material.opacity=T.MathUtils.lerp(this.projections.material.opacity,target,blend);
+      this.projections.shaftMaterial.opacity=this.reducedMotion||preset==='night'?0:.025;
+    }
+  }
+  private candle?: ReturnType<typeof makeCandleCorner>;
   private framing?: T.Vector3;
   private quiet=false;
   seated=false;
 
-  get candleLit(){return this.candle?.flame.visible??false;}
+  get candleLit(){return !!this.carried||this.placed.length>0;}
 
   toggleCandle(onChange:()=>void){
-    const candle=this.candle;
-    if(!candle||this.blocked)return;
-    const toggle=()=>{
-      candle.glow.visible=candle.flame.visible=!candle.flame.visible;
-      this.framing=candle.stand.position.clone().setY(1.24);
-      this.notice(this.candleLit?'촛불을 켰습니다. 잠시 머물러 보세요.':'촛불을 껐습니다.');
-      onChange();
-    };
-    if(this.position.distanceTo(candleStop)<.3){this.clear();toggle();}
-    else this.go(candleStop,toggle);
+    if(this.blocked||!this.candle)return;
+    if(this.carried){this.placeCandle();return;}
+    this.go(candleStop,()=>{
+      if(!this.candle||this.carried)return;
+      this.carried=makeTaper();this.avatar.hand.add(this.carried.root);
+      this.carried.root.rotation.x=-.9;this.handLight.visible=true;
+      this.framing=undefined;this.cinematic=true;
+      this.particles.start(this.position.clone().setY(1));
+      this.ceremony={kind:'candle',elapsed:0,duration:1.5};this.onSound('candle');
+      this.notice('촛불을 켰습니다. 들고 걷거나 앉아 보세요.');onChange();
+    });
   }
 
   visit(point:keyof typeof barilochePoints){
@@ -190,9 +230,10 @@ export class Walkthrough {
     this.daylight.position.set(-6,12,-11);
     this.altarLight.position.set(0,4.3,-13.7);
     this.altarLight.visible=false;
-    this.scene.add(this.hemisphere,this.daylight,this.altarLight);
+    this.handLight.visible=false;this.scene.add(this.handLight,this.particles.root,this.hemisphere,this.daylight,this.altarLight);
     this.setLighting('day');
     const fill=new T.DirectionalLight('#a0bbd9',.65);fill.position.set(7,5,9);this.scene.add(fill,this.avatar.group,this.privateRoom);
+    enrichMaterials(this.privateRoom);
     const canvas=this.renderer.domElement;
     host.append(canvas);
     this.observer=new ResizeObserver(()=>{const w=Math.max(host.clientWidth,1), h=Math.max(host.clientHeight,1);this.renderer.setSize(w,h);this.camera.aspect=w/h;this.camera.updateProjectionMatrix();});
@@ -218,12 +259,24 @@ export class Walkthrough {
     if(request!==this.request){unload(gltf.scene);return false;}
     let next:Place;
     try{next=decode(gltf.scene);}catch(error){unload(gltf.scene);throw error;}
+    this.skipEffect();
+    if(this.carried)unload(this.carried.root);
+    this.carried=undefined;this.placed=[];this.markers=[];this.avatar.veil.visible=false;
+    this.handLight.visible=false;
     if(this.place)unload(this.place.root);
     this.place=next;this.scene.add(next.root);
-    this.candle=id==='bariloche'?makeCandle():undefined;
+    this.candle=id==='bariloche'?makeCandleCorner():undefined;
     if(this.candle){
-      next.root.add(this.candle.stand);
-      next.blockers.push({x:candlePosition.x,z:candlePosition.z,width:.56,depth:.56});
+      enrichMaterials(next.root);
+      this.altarDecor=makeAltarDecor();next.root.add(this.altarDecor.group);
+      next.root.add(this.candle.group);
+      next.blockers.push({x:6.15,z:13.25,width:1.9,depth:.8});
+      this.projections=makeProjections();next.root.add(this.projections.group);
+      for(const target of [candleStop,next.door,barilochePoints.altar.stop]){
+        const ring=markerRing();ring.position.x=target.x;ring.position.z=target.z;next.root.add(ring);this.markers.push(ring);
+      }
+    }else{
+      this.altarDecor=undefined;this.projections=undefined;
     }
     this.setLighting('day');
     this.altarLight.visible=!!this.candle;
@@ -235,20 +288,20 @@ export class Walkthrough {
   }
   mode(view:string){
     if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points'&&view!=='reflection')this.framing=undefined;
-    const preset=this.lightPreset;
-    this.setLighting(view==='room'?'day':preset);
-    this.lightPreset=preset;
+
     this.altarLight.visible=!!this.candle&&view!=='room';
+    if(view==='room'){this.cameraEye.set(28.15,1.43,2.47);this.cameraTarget.set(30.05,1.24,-2.2);}
+    if(view==='welcome'||view==='loading')this.skipEffect();
     this.view=view;this.avatar.group.visible=view==='walk';this.privateRoom.visible=view==='room';
     if(this.place)this.place.root.visible=view!=='room';
     this.clear();
   }
-  get blocked(){return this.view!=='walk'||!this.place||this.quiet;}
+  get blocked(){return this.view!=='walk'||!this.place||this.quiet||!!this.ceremony;}
   private clear=()=>{this.keys.clear();this.path=[];this.arrival=undefined;this.pressed=undefined;};
   private keyDown=(e:KeyboardEvent)=>{
     const k=e.key.toLowerCase();
     if(this.blocked||e.altKey||e.metaKey||e.ctrlKey||!(k in keyDirections)||e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
-    e.preventDefault();this.framing=undefined;this.path=[];this.arrival=undefined;this.keys.add(k);
+    e.preventDefault();this.framing=undefined;this.cinematic=false;this.path=[];this.arrival=undefined;this.keys.add(k);
   };
   private keyUp=(e:KeyboardEvent)=>{this.keys.delete(e.key.toLowerCase());};
   private pointerDown=(e:PointerEvent)=>{if(this.blocked||e.button!==0)return;this.pressed={x:e.clientX,y:e.clientY,drag:false};this.renderer.domElement.setPointerCapture(e.pointerId);};
@@ -256,7 +309,7 @@ export class Walkthrough {
     if(!this.pressed)return;
     const dx=e.clientX-this.pressed.x,dy=e.clientY-this.pressed.y;
     if(!this.pressed.drag&&Math.hypot(dx,dy)<5)return;
-    this.framing=undefined;
+    this.framing=undefined;this.cinematic=false;
     this.yaw-=dx*.006;this.pitch=T.MathUtils.clamp(this.pitch+dy*.005,-.2,.65);
     this.pressed={x:e.clientX,y:e.clientY,drag:true};
   };
@@ -270,7 +323,7 @@ export class Walkthrough {
     if(target)this.go(target);
   };
   private pointerCancel=()=>{this.pressed=undefined;};
-  private wheel=(e:WheelEvent)=>{if(this.blocked)return;e.preventDefault();this.framing=undefined;this.distance=T.MathUtils.clamp(this.distance+e.deltaY*.005,2.4,6.6);};
+  private wheel=(e:WheelEvent)=>{if(this.blocked)return;e.preventDefault();this.framing=undefined;this.cinematic=false;this.distance=T.MathUtils.clamp(this.distance+e.deltaY*.005,2.4,6.6);};
   private valid(x:number,z:number,pad=radius){
     if(!this.place)return false;
     const [left,right,front,back]=this.place.bounds;
@@ -316,7 +369,7 @@ export class Walkthrough {
   }
   private go(target:T.Vector3, onArrival?:()=>void){
     if(this.blocked)return;
-    this.seated=false;this.framing=undefined;this.clear();
+    this.seated=false;this.cinematic=false;this.framing=undefined;this.clear();
     if(this.position.distanceTo(target)<.18){onArrival?.();return;}
     this.path=this.route(target);
     if(!this.path.length){this.notice('이동할 수 있는 바닥을 선택해 주세요.');return;}
@@ -324,9 +377,9 @@ export class Walkthrough {
   }
   sit(){
     if(this.blocked||!this.place)return;
-    if(this.seated){this.seated=false;this.framing=undefined;this.notice('일어났습니다.');return;}
+    if(this.seated){this.seated=false;this.cinematic=false;this.framing=undefined;this.notice('일어났습니다.');return;}
     const nearest=[...this.place.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
-    this.go(nearest,()=>{this.seated=true;if(this.candle)this.framing=barilochePoints.altar.view;this.avatar.group.rotation.y=0;this.notice('잠시 앉아 쉬어가세요.');});
+    this.go(nearest,()=>{this.seated=true;if(this.candle){this.cinematic=true;this.framing=barilochePoints.altar.view;}this.onSound('sit');this.avatar.group.rotation.y=0;this.notice('잠시 앉아 쉬어가세요.');});
   }
   walkToDoor(enter:()=>void){if(this.place)this.go(this.place.door,enter);}
   private move(dx:number,dz:number){
@@ -337,6 +390,24 @@ export class Walkthrough {
   }
   private tick=(now:number)=>{
     const delta=Math.min(.05,(now-(this.last||now))/1000);this.last=now;
+    if(delta>0){this.frames.push(delta*1000);if(this.frames.length>120)this.frames.shift();}
+    this.updateLighting(delta);
+    this.particles.tick(delta,this.reducedMotion);
+    if(this.ceremony){
+      this.ceremony.elapsed+=delta;
+      if(this.ceremony.elapsed>=this.ceremony.duration){const done=this.ceremony.done;this.ceremony=undefined;done?.();}
+    }
+    const seconds=now/1000;
+    if(this.candle){
+      this.candle.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
+      this.altarDecor?.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
+      this.placed.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
+      this.markers.forEach(ring=>{const nearby=ring.position.distanceTo(this.position)<5;ring.visible=nearby&&this.view==='walk'&&!this.quiet;ring.scale.setScalar(this.reducedMotion?1:1+Math.sin(seconds*2)*.05);});
+    }
+    if(this.carried){flicker(this.carried,seconds,0,this.reducedMotion);this.carried.root.getWorldPosition(this.handLight.position);this.handLight.position.y+=.4;}
+    this.handLight.visible=!!this.carried&&this.view==='walk';
+    this.avatar.arms[1].rotation.x=this.carried?.9:0;
+    this.avatar.veil.scale.y=this.ceremony?.kind==='veil'&&!this.reducedMotion?.9+.1*Math.min(1,this.ceremony.elapsed/.6):1;
     let moved=0;
     if(!this.blocked){
       const direction=new T.Vector3();
@@ -352,34 +423,43 @@ export class Walkthrough {
       this.avatar.rig.position.z=this.seated?.77:0;
       this.avatar.legs.forEach((leg,i)=>{leg.rotation.x=this.seated?-1.24:moved?Math.sin(now*.012+i*Math.PI)*.42:0;});
     }
-    if(this.view==='welcome'){
+    const desiredEye=new T.Vector3(),desiredTarget=new T.Vector3();
+    if(this.view==='release'){
+      const progress=this.ceremony?this.ceremony.elapsed/this.ceremony.duration:1;
+      desiredEye.set(1.5,1.8+progress*1.4,10);
+      desiredTarget.set(0,3+progress*5,7);
+    }else if(this.view==='welcome'){
       if(this.candle){
-        this.camera.position.set(-1,2.45,18);
-        this.camera.lookAt(.1,2.6,-15);
+        desiredEye.set(-1,2.45,18);desiredTarget.set(.1,2.6,-15);
       }else{
-        this.camera.position.set(-2.25,2.65,16.9);
-        this.camera.lookAt(2.5,3.55,-15);
+        desiredEye.set(-2.25,2.65,16.9);desiredTarget.set(2.5,3.55,-15);
       }
     }else if(this.view==='room'){
-      this.camera.position.set(28.15,1.43,2.47);this.camera.lookAt(30.05,1.24,-2.2);
+      desiredEye.set(28.15,1.43,2.47);desiredTarget.set(30.05,1.24,-2.2);
+    }else if(this.cinematic&&!this.quiet){
+      desiredEye.copy(this.position).add(new T.Vector3(-1.8,this.seated?1.7:2.05,2.6));
+      desiredTarget.copy(this.position).add(new T.Vector3(.1,1.1,-.4));
+      while(!this.valid(desiredEye.x,desiredEye.z,.1)&&desiredEye.distanceTo(this.position)>.8)desiredEye.lerp(this.position.clone().setY(1.7),.16);
     }else if(this.framing){
       const eye=this.position.clone().setY(this.seated?1.28:1.63);
-      this.camera.position.copy(eye);
-      this.camera.lookAt(this.framing);
+      desiredEye.copy(eye);desiredTarget.copy(this.framing);
     }else{
       const center=this.position.clone().add(new T.Vector3(0,this.seated?.87:1.22,0));
       const cameraOffset=new T.Vector3(Math.sin(this.yaw),this.pitch+.19,Math.cos(this.yaw));
       let distance=this.distance;
       while(distance>.65&&!this.valid(center.x+cameraOffset.x*distance,center.z+cameraOffset.z*distance,.12))distance-=.16;
-      this.camera.position.copy(center).addScaledVector(cameraOffset,distance);this.camera.lookAt(center.clone().add(new T.Vector3(0,.43,0)));
+      desiredEye.copy(center).addScaledVector(cameraOffset,distance);desiredTarget.copy(center).add(new T.Vector3(0,.43,0));
     }
-    this.avatar.group.visible=this.view==='walk'&&!this.framing;
+    const blend=this.reducedMotion||!this.cameraEye.lengthSq()?1:1-Math.exp(-delta*7);
+    this.cameraEye.lerp(desiredEye,blend);this.cameraTarget.lerp(desiredTarget,blend);
+    this.camera.position.copy(this.cameraEye);this.camera.lookAt(this.cameraTarget);
+    this.avatar.group.visible=this.view!=='room'&&this.view!=='release'&&this.view!=='welcome'&&(!this.framing||this.cinematic&&!this.quiet);
     this.renderer.render(this.scene,this.camera);this.frame=requestAnimationFrame(this.tick);
   };
   dispose(){
     this.request++;cancelAnimationFrame(this.frame);this.observer.disconnect();
     window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);window.removeEventListener('blur',this.clear);
-    if(this.place)unload(this.place.root);unload(this.avatar.group);unload(this.privateRoom);
+    if(this.place)unload(this.place.root);unload(this.avatar.group);unload(this.privateRoom);unload(this.particles.root);
     const canvas=this.renderer.domElement;
     canvas.removeEventListener('pointerdown',this.pointerDown);canvas.removeEventListener('pointermove',this.pointerMove);
     canvas.removeEventListener('pointerup',this.pointerUp);canvas.removeEventListener('pointercancel',this.pointerCancel);canvas.removeEventListener('wheel',this.wheel);

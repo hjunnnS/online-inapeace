@@ -8,6 +8,9 @@ const viewport=element('viewport'), welcome=element('welcome'), controls=element
 const enterSound=element<HTMLButtonElement>('enter-sound');
 const enter=element<HTMLButtonElement>('enter'), exit=element<HTMLButtonElement>('exit'), sit=element<HTMLButtonElement>('sit'), door=element<HTMLButtonElement>('confess');
 const header=element('header'), pointsOpen=element('points-open'), candle=element('candle');
+const veil=element<HTMLButtonElement>('veil'), reducedMotion=element<HTMLInputElement>('reduced-motion');
+const effectPanel=element('effect-panel'), hotspots=element('hotspots');
+let releasing=false;
 const quiet=element('quiet'), quietExit=element('quiet-exit'), points=element<HTMLDialogElement>('points');
 let quietView=false;
 const notice=element('notice'), retry=element<HTMLButtonElement>('retry');
@@ -127,7 +130,7 @@ function syncBackground(){
   }
   ambient.loop=!organ;
   const voiceBusy=audioState==='loading'||audioState==='playing'||audioState==='waiting';
-  if(!backgroundOn||!ambient.volume||document.hidden||confessional.open||opening||voiceBusy){
+  if(!backgroundOn||!ambient.volume||document.hidden||confessional.open||releasing||opening||voiceBusy){
     ambient.pause();
     backgroundStatus.textContent=backgroundOn&&voiceBusy?'전례 음성 재생 중에는 배경 소리를 쉽니다.':'배경 소리 꺼짐';
     return;
@@ -155,8 +158,8 @@ ambient.onended=()=>{backgroundOn=false;syncBackground();};
 element('audio-open').onclick=()=>{scene?.mode('audio');panel.showModal();};
 element('audio-close').onclick=()=>panel.close();
 panel.onclose=()=>{scene?.mode(active?'walk':'welcome');};
-document.addEventListener('visibilitychange',()=>{if(document.hidden)pauseVoice();syncBackground();});
-window.addEventListener('pagehide',()=>{thought.value='';resetVoice();backgroundOn=false;syncBackground();if(confessional.open)confessional.close();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){pauseVoice();scene?.skipEffect();}syncBackground();});
+window.addEventListener('pagehide',()=>{thought.value='';scene?.skipEffect();resetVoice();backgroundOn=false;syncBackground();if(confessional.open)confessional.close();});
 window.addEventListener('pageshow',()=>{thought.value='';if(confessional.open)confessional.close();});
 
 function announce(message:string,duration=3000){
@@ -171,18 +174,57 @@ function leaveRoom(){
   thought.value='';
   if(confessional.open)confessional.close();
 }
-element('release').onclick=leaveRoom;
+function finishRelease(){
+  releasing=false;effectPanel.hidden=true;header.hidden=false;controls.hidden=!active;scene?.mode(active?'walk':'welcome');
+  if(active){door.focus();announce('본당으로 돌아왔습니다.');}
+  syncBackground();
+}
+element('effect-skip').onclick=()=>scene?.skipEffect();
+element('release').onclick=()=>{
+  if(releasing)return;
+  thought.value='';releasing=true;confessional.close();
+};
 element('cancel').onclick=leaveRoom;
 confessional.oncancel=(event)=>{event.preventDefault();leaveRoom();};
-confessional.onclose=()=>{thought.value='';scene?.mode('walk');door.focus();syncBackground();announce('본당으로 돌아왔습니다.');};
+confessional.onclose=()=>{
+  thought.value='';
+  if(releasing){
+    effectPanel.hidden=false;header.hidden=true;controls.hidden=true;scene?.releaseThought(finishRelease);element('effect-skip').focus();
+  }else{scene?.mode('walk');door.focus();syncBackground();announce('본당으로 돌아왔습니다.');}
+};
+veil.onclick=()=>scene?.toggleVeil();
+reducedMotion.onchange=()=>{scene?.setReducedMotion(reducedMotion.checked);};
 sit.onclick=()=>scene?.sit();
 door.onclick=()=>{announce('고해소 쪽으로 이동합니다.');scene?.walkToDoor(enterRoom);};
 function updateWalkControls(){
   const local=active&&selected==='bariloche';
   pointsOpen.hidden=!local;
   reflectionOpen.hidden=!local;
+  veil.hidden=!local;
+  veil.textContent=scene?.veilOn?'미사포 벗기':'미사포 쓰기';
+  veil.disabled=!!scene?.effect;
+  candle.toggleAttribute('disabled',!!scene?.effect);
+  if(qa){
+    const status=element('qa-status');status.hidden=false;
+    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,audioState,backgroundPlaying:!ambient.paused,room:confessional.open});
+  }
+  const locations=scene?.hotspots()??[];
+  for(const button of hotspots.querySelectorAll<HTMLButtonElement>('button'))button.hidden=true;
+  for(const location of locations){
+    let button=hotspots.querySelector<HTMLButtonElement>('[data-action="'+location.id+'"]');
+    if(!button){
+      button=document.createElement('button');button.type='button';button.dataset.action=location.id;
+      button.onclick=()=>{
+        if(location.id==='altar')scene?.visit('altar');
+        else element(location.id).click();
+      };
+      hotspots.append(button);
+    }
+    button.hidden=false;button.textContent='✧ '+location.label;
+    button.style.left=location.x+'%';button.style.top=location.y+'%';
+  }
   candle.hidden=!local;
-  candle.textContent=scene?.candleLit?'촛불 끄기':'촛불 켜기';
+  candle.textContent=scene?.holdingCandle?'촛불 놓기':'촛불 켜기';
   quiet.hidden=!local||!scene?.seated;
   sit.textContent=scene?.seated?'일어나기':'앉기';
 }
@@ -196,6 +238,7 @@ function setQuiet(on:boolean){
 quiet.onclick=()=>{if(active&&selected==='bariloche'&&scene?.seated)setQuiet(true);};
 quietExit.onclick=()=>setQuiet(false);
 window.addEventListener('keydown',event=>{
+  if(event.key==='Escape'&&scene?.effect){event.preventDefault();scene.skipEffect();}
   if(quietView&&event.key==='Escape'){event.preventDefault();setQuiet(false);}
 });
 candle.onclick=()=>scene?.toggleCandle(updateWalkControls);
@@ -245,7 +288,7 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
     retry.onclick=()=>void switchScene(id,retryWalk);
   }finally{opening=false;enter.disabled=enterSound.disabled=false;if(active)syncBackground();}
 }
-try{scene=new Walkthrough(viewport,announce);}
+try{scene=new Walkthrough(viewport,announce);reducedMotion.checked=scene.motionReduced;}
 catch{announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);}
 function enterCathedral(withSound:boolean){
   resetVoice();
