@@ -235,6 +235,19 @@ export function makeChristmasTree(){
   const bulbs=new T.InstancedMesh(new T.SphereGeometry(.037,7,6),new T.MeshBasicMaterial({color:'#ffe3a4'}),100);
   for(let i=0;i<100;i++){dummy.position.copy(wirePoints[Math.floor(i/100*160)]);dummy.scale.setScalar(1);dummy.updateMatrix();bulbs.setMatrixAt(i,dummy.matrix);}
   group.add(bulbs);
+  const glowMap=texture((ctx,s)=>{
+    const glow=ctx.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+    glow.addColorStop(0,'#fff5d9ff');glow.addColorStop(.15,'#ffe0a5cc');glow.addColorStop(.45,'#ffd28a44');glow.addColorStop(1,'#ffd28a00');
+    ctx.fillStyle=glow;ctx.fillRect(0,0,s,s);
+  },32);
+  const glowGeometry=new T.BufferGeometry(),positions=new Float32Array(300),colors=new Float32Array(300);
+  for(let i=0;i<100;i++){const point=wirePoints[Math.floor(i/100*160)];positions.set(point.toArray(),i*3);}
+  glowGeometry.setAttribute('position',new T.BufferAttribute(positions,3));
+  glowGeometry.setAttribute('color',new T.BufferAttribute(colors,3));
+  const glowMaterial=new T.PointsMaterial({map:glowMap,size:.25,vertexColors:true,transparent:true,opacity:.8,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
+  group.add(new T.Points(glowGeometry,glowMaterial));
+  const bulbColor=new T.Color('#ffe3a4');bulbs.material.color.set('#ffffff');bulbs.material.toneMapped=false;
+
   const starShape=new T.Shape();
   for(let i=0;i<10;i++){
     const angle=Math.PI/2+i*Math.PI/5,radius=i%2?.18:.42;
@@ -253,5 +266,26 @@ export function makeChristmasTree(){
     mesh(group,new T.BoxGeometry(.09,.43+i*.08,.57),gold,[x,.25+i*.04,z]);
     mesh(group,new T.BoxGeometry(.6,.04,.09),gold,[x,.47+i*.08,z]);
   }
-  return {group,bulbs};
+  return {group,bulbs,
+    tick(seconds:number,reduced:boolean){
+      for(let i=0;i<100;i++){
+        const brightness=reduced?.8:.45+.45*(Math.sin(seconds*2.1+i*2.39996)*.5+.5)+.3*Math.pow(Math.max(0,Math.sin(seconds*3.3+i*1.7)),6);
+        bulbColor.set('#ffe3a4').multiplyScalar(brightness);bulbs.setColorAt(i,bulbColor);
+        colors.set([bulbColor.r,bulbColor.g,bulbColor.b],i*3);
+      }
+      if(bulbs.instanceColor)bulbs.instanceColor.needsUpdate=true;
+      glowGeometry.attributes.color.needsUpdate=true;
+    }
+  };
+}
+
+/** Flame/halo overlays on the twelve existing pillar candle brackets. */
+export function makeWallCandles(){
+  const group=new T.Group();group.name='wall-candle-flames';
+  const tapers:Taper[]=[];
+  for(const side of [-1,1])for(let i=0;i<6;i++){
+    const taper=makeTaper();taper.root.position.set(side*4.32,3.64,-13+i*5.2);
+    taper.halo.scale.set(.55,.7,1);group.add(taper.root);tapers.push(taper);
+  }
+  return {group,tapers};
 }

@@ -1,6 +1,6 @@
 import * as T from 'three';
 import { disposeObject as unload } from './resources';
-import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, makeChristmasTree, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
+import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, makeChristmasTree, makeWallCandles, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 export type SceneId = string;
@@ -129,6 +129,7 @@ export class Walkthrough {
     }
   }
   private altarDecor?:ReturnType<typeof makeAltarDecor>;
+  private wallCandles?:ReturnType<typeof makeWallCandles>;
   private projections?:ReturnType<typeof makeProjections>;
   private markers:T.Mesh[]=[];
   private carried?:Taper;
@@ -142,6 +143,8 @@ export class Walkthrough {
   onSound:(name:'candle'|'sit'|'room'|'release')=>void=()=>{};
 
   get worshipperCount(){return this.backgroundPeople.length;}
+  get veiledWorshipperCount(){return this.backgroundPeople.filter(person=>person.avatar.veil.visible).length;}
+  get wallCandleCount(){return this.wallCandles?.tapers.length??0;}
   get treePresent(){return !!this.christmasTree;}
   get veilOn(){return this.avatar.veil.visible;}
   get holdingCandle(){return !!this.carried;}
@@ -300,23 +303,25 @@ export class Walkthrough {
       this.christmasTree=makeChristmasTree();next.root.add(this.christmasTree.group);
       next.blockers.push({x:-6.15,z:15.8,width:4.15,depth:4.15});
       const colors=['#68576d','#6a6d50','#435d72','#755348','#9c8f77','#594e62','#8f5962','#5e766e','#52567b','#8b7453'];
-      for(let i=0;i<10;i++){
-        const avatar=makeAvatar(colors[i]),seated=i>=4;
+      for(let i=0;i<20;i++){
+        const avatar=makeAvatar(colors[i%colors.length]),seated=i>=8;
+        avatar.veil.visible=i%2===0;
         if(seated){
-          avatar.group.position.copy(next.seats[((i-4)*3+3)%next.seats.length]);
+          avatar.group.position.copy(next.seats[((i-8)*5+1)%next.seats.length]);
           avatar.rig.scale.y=.78;avatar.rig.position.z=.77;avatar.legs.forEach(leg=>leg.rotation.x=-1.2);
-        }else avatar.group.position.set(i%2?6.5:-6.5,0,5.5-Math.floor(i/2)*8);
+        }else avatar.group.position.set(i%2?6.5:-6.5,0,9-Math.floor(i/2)*6);
         avatar.group.scale.setScalar(.94);avatar.group.rotation.y=0;next.root.add(avatar.group);
         this.backgroundPeople.push({avatar,seated,phase:i});
       }
       next.root.add(this.candle.group);
       next.blockers.push({x:6.15,z:13.25,width:1.9,depth:.8});
+      this.wallCandles=makeWallCandles();next.root.add(this.wallCandles.group);
       this.projections=makeProjections();next.root.add(this.projections.group);
       for(const target of [candleStop,next.door,barilochePoints.altar.stop]){
         const ring=markerRing();ring.position.x=target.x;ring.position.z=target.z;next.root.add(ring);this.markers.push(ring);
       }
     }else{
-      this.christmasTree=undefined;this.choir=undefined;this.altarDecor=undefined;this.projections=undefined;
+      this.christmasTree=undefined;this.choir=undefined;this.altarDecor=undefined;this.wallCandles=undefined;this.projections=undefined;
     }
     this.setLighting('day');
     this.altarLight.visible=!!this.candle;
@@ -452,7 +457,8 @@ export class Walkthrough {
 
       }
     }
-    if(this.christmasTree){this.christmasTree.bulbs.material.color.setScalar(this.reducedMotion?1:.92+Math.sin(seconds*.65)*.08);}
+    this.christmasTree?.tick(seconds,this.reducedMotion);
+    this.wallCandles?.tapers.forEach((taper,i)=>flicker(taper,seconds,i*1.7,this.reducedMotion));
     if(this.candle){
       this.candle.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));
       this.altarDecor?.tapers.forEach((taper,i)=>flicker(taper,seconds,i,this.reducedMotion));

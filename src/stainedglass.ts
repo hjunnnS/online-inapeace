@@ -1,5 +1,20 @@
 import * as T from 'three';
 
+// Keep the leadwork dark while making the colored glass slightly less saturated.
+function softenGlass(material:T.MeshStandardMaterial|T.MeshBasicMaterial){
+  material.onBeforeCompile=shader=>{
+    shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
+vec3 softGlassColor(vec3 color){
+  float luminance=dot(color,vec3(0.2126,0.7152,0.0722));
+  vec3 muted=mix(vec3(luminance),color,0.78);
+  return mix(muted,vec3(1.0),0.055*smoothstep(0.03,0.35,luminance));
+}`)
+      .replace('#include <map_fragment>',T.ShaderChunk.map_fragment.replace('diffuseColor *= sampledDiffuseColor;','sampledDiffuseColor.rgb=softGlassColor(sampledDiffuseColor.rgb);\n diffuseColor *= sampledDiffuseColor;'))
+      .replace('#include <emissivemap_fragment>',T.ShaderChunk.emissivemap_fragment.replace('totalEmissiveRadiance *= emissiveColor.rgb;','emissiveColor.rgb=softGlassColor(emissiveColor.rgb);\n totalEmissiveRadiance *= emissiveColor.rgb;'));
+  };
+  material.customProgramCacheKey=()=> 'soft-stained-glass-v1';
+}
+
 /** Original glass artwork shared by the windows and their projected color. */
 export function makeProjections(){
   const group=new T.Group();group.name='stained-glass-and-daylight';group.visible=false;
@@ -18,6 +33,7 @@ export function makeProjections(){
   const geometry=new T.ShapeGeometry(shape,32),uv=geometry.getAttribute('uv'),position=geometry.getAttribute('position');
   for(let i=0;i<uv.count;i++)uv.setXY(i,(position.getX(i)+.8)/1.6,position.getY(i)/3.75);
   const glass=panes.map(map=>new T.MeshStandardMaterial({map,emissiveMap:map,emissive:'#ffffff',emissiveIntensity:.83,roughness:.35,metalness:.03,side:T.DoubleSide}));
+  glass.forEach(softenGlass);
   const addWindow=(x:number,y:number,z:number,turn:number,index:number)=>{
     const window=new T.Mesh(geometry,glass[index%3]);window.position.set(x,y,z);window.rotation.y=turn;group.add(window);
   };
@@ -29,7 +45,7 @@ export function makeProjections(){
   for(let i=0;i<5;i++){
     const z=-13+i*5.2;
     const material=new T.MeshBasicMaterial({map:panes[(i+1)%3],transparent:true,opacity:.27,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,toneMapped:false});
-    projections.push(material);
+    softenGlass(material);projections.push(material);
     const patch=new T.Mesh(new T.PlaneGeometry(7.2,2.7),material);
     patch.position.set(3.35,.044,z+2.7);patch.rotation.set(-Math.PI/2,0,-.36);group.add(patch);
   }
