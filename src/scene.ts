@@ -146,6 +146,8 @@ export class Walkthrough {
   onSound:(name:'candle'|'sit'|'room'|'release')=>void=()=>{};
 
   get worshipperCount(){return this.backgroundPeople.length;}
+  get hairPatterns(){const counts=[0,0,0,0,0];for(const person of this.backgroundPeople)counts[person.avatar.hairType]++;for(const person of this.visitors?.people??[])counts[person.avatar.hairType]++;return counts;}
+  get prayerCounts(){return {total:this.backgroundPeople.filter(person=>person.avatar.praying).length,veiled:this.backgroundPeople.filter(person=>person.avatar.praying&&person.avatar.veil.visible).length};}
   get characterPatterns(){const counts=[0,0,0,0,0];for(const person of this.backgroundPeople)counts[person.avatar.pattern]++;for(const person of this.visitors?.people??[])counts[person.avatar.pattern]++;return counts;}
   get playerSeatPose(){return {blend:this.avatar.pose.seat,hipHeight:this.avatar.rig.position.y,offset:this.avatar.rig.position.z,knees:this.avatar.knees.map(knee=>knee.rotation.x)};}
   get movingVisitorStatus(){return this.visitors?.status??[];}
@@ -311,10 +313,12 @@ export class Walkthrough {
       this.christmasTree=makeChristmasTree();next.root.add(this.christmasTree.group);
       next.root.add(makeEntrance());next.blockers.push({x:.1,z:18.6,width:5.3,depth:.5});
       next.blockers.push({x:-6.15,z:15.8,width:4.15,depth:4.15});
+      const shuffled=(values:number[])=>{for(let i=values.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[values[i],values[j]]=[values[j],values[i]];}return values;};
+      const praying=new Set([...shuffled([8,10,12,14,16,18]).slice(0,4),...shuffled([9,11,13,15,17,19]).slice(0,2)]);
       const colors=['#68576d','#6a6d50','#435d72','#755348','#9c8f77','#594e62','#8f5962','#5e766e','#52567b','#8b7453'];
       for(let i=0;i<20;i++){
         const avatar=makeAvatar(colors[i%colors.length]),seated=i>=8;
-        avatar.veil.visible=i%2===0;
+        avatar.veil.visible=i%2===0;avatar.praying=praying.has(i);
         if(seated){
           avatar.group.position.copy(next.seats[((i-8)*5+1)%next.seats.length]);
           animateAvatar(avatar,true,0,0,1,true);
@@ -483,7 +487,7 @@ export class Walkthrough {
     }
     if(this.carried){flicker(this.carried,seconds,0,this.reducedMotion);this.carried.root.getWorldPosition(this.handLight.position);this.handLight.position.y+=.4;}
     this.handLight.visible=!!this.carried&&this.view==='walk';
-    this.avatar.veil.scale.y=this.ceremony?.kind==='veil'&&!this.reducedMotion?.9+.1*Math.min(1,this.ceremony.elapsed/.6):1;
+
     let moved=0;
     this.standDelay=Math.max(0,this.standDelay-delta);
     if(!this.blocked&&!this.standDelay){
@@ -500,6 +504,7 @@ export class Walkthrough {
     }
     if(this.seated){const difference=T.MathUtils.euclideanModulo(-this.avatar.group.rotation.y+Math.PI,Math.PI*2)-Math.PI;this.avatar.group.rotation.y+=difference*Math.min(1,delta*9);}
     animateAvatar(this.avatar,this.seated,delta?moved/delta:0,seconds,delta,this.reducedMotion);
+    if(this.ceremony?.kind==='veil'&&!this.reducedMotion)this.avatar.veil.scale.y*=.9+.1*Math.min(1,this.ceremony.elapsed/.6);
     if(this.carried){this.avatar.arms[1].rotation.x=.2;this.avatar.elbows[1].rotation.x=1;this.avatar.hand.getWorldQuaternion(this.carried.root.quaternion);this.carried.root.quaternion.invert();}
     if(this.view==='conduct'){
       this.avatar.arms[0].rotation.x=.8+Math.sin(seconds*4)*.22;

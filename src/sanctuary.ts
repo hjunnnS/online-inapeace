@@ -246,7 +246,7 @@ export function makeChristmasTree(){
   for(let i=0;i<180;i++){const point=wirePoints[Math.floor(i/180*160)];positions.set(point.toArray(),i*3);}
   glowGeometry.setAttribute('position',new T.BufferAttribute(positions,3));
   glowGeometry.setAttribute('color',new T.BufferAttribute(colors,3));
-  const glowMaterial=new T.PointsMaterial({map:glowMap,size:.48,vertexColors:true,transparent:true,opacity:1,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
+  const glowMaterial=new T.PointsMaterial({map:glowMap,size:.62,vertexColors:true,transparent:true,opacity:1,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false});
   group.add(new T.Points(glowGeometry,glowMaterial));
   const bulbColor=new T.Color('#ffe3a4');bulbs.material.color.set('#ffffff');bulbs.material.toneMapped=false;
 
@@ -261,13 +261,19 @@ export function makeChristmasTree(){
   const star=mesh(group,new T.ExtrudeGeometry(starShape,{depth:.07,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.025,bevelThickness:.025}),starMaterial,[0,6.85,0]);
   star.rotation.y=.5;
   const starHalo=new T.Sprite(new T.SpriteMaterial({map:glowMap,color:'#ffd37a',transparent:true,opacity:.65,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));
-  starHalo.position.set(0,6.85,0);starHalo.scale.set(1.65,1.65,1);group.add(starHalo);
+  starHalo.position.set(0,6.85,0);starHalo.scale.set(2,2,1);group.add(starHalo);
   const sparkleMap=texture((ctx,size)=>{
     ctx.clearRect(0,0,size,size);const c=size/2;
     ctx.fillStyle='#fff6d2';ctx.beginPath();ctx.moveTo(c,0);ctx.lineTo(c+2,c-2);ctx.lineTo(size,c);ctx.lineTo(c+2,c+2);ctx.lineTo(c,size);ctx.lineTo(c-2,c+2);ctx.lineTo(0,c);ctx.lineTo(c-2,c-2);ctx.closePath();ctx.fill();
   },64);
-  const starGlint=new T.Sprite(new T.SpriteMaterial({map:sparkleMap,color:'#fff5d4',transparent:true,opacity:.8,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));starGlint.position.copy(starHalo.position);starGlint.scale.set(.95,.95,1);group.add(starGlint);
+  const starGlint=new T.Sprite(new T.SpriteMaterial({map:sparkleMap,color:'#fff5d4',transparent:true,opacity:.8,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));starGlint.position.copy(starHalo.position);starGlint.scale.set(1.25,1.25,1);group.add(starGlint);
 
+  const glintGeometry=new T.BufferGeometry(),glintColors=new Float32Array(540);
+  glintGeometry.setAttribute('position',new T.BufferAttribute(positions,3));glintGeometry.setAttribute('color',new T.BufferAttribute(glintColors,3));
+  const glints=new T.Points(glintGeometry,new T.PointsMaterial({map:sparkleMap,size:.55,vertexColors:true,transparent:true,opacity:.9,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));group.add(glints);
+  const moteGeometry=new T.BufferGeometry(),motePositions=new Float32Array(32*3);
+  moteGeometry.setAttribute('position',new T.BufferAttribute(motePositions,3));
+  const motes=new T.Points(moteGeometry,new T.PointsMaterial({map:glowMap,color:'#ffe0a1',size:.1,transparent:true,opacity:.75,depthWrite:false,blending:T.AdditiveBlending,toneMapped:false}));group.add(motes);
   const light=new T.PointLight('#ffd18c',12,8,1.4);light.position.set(0,3,1);group.add(light);
   const wrapping=['#8b303e','#b49760','#254f45','#eee0ba'];
   for(let i=0;i<4;i++){
@@ -280,12 +286,20 @@ export function makeChristmasTree(){
   return {group,bulbs,
     tick(seconds:number,reduced:boolean){
       for(let i=0;i<180;i++){
-        const brightness=reduced?1.1:.35+.8*(Math.sin(seconds*2.3+i*2.39996)*.5+.5)+2.2*Math.pow(Math.max(0,Math.sin(seconds*3.6+i*1.7)),10);
-        bulbColor.set('#ffe3a4').multiplyScalar(brightness);bulbs.setColorAt(i,bulbColor);
+        const brightness=reduced?1.25:.45+1.0*(Math.sin(seconds*2.3+i*2.39996)*.5+.5)+3.2*Math.pow(Math.max(0,Math.sin(seconds*3.6+i*1.7)),10);
+        bulbColor.set(i%11===0?'#e0edff':i%5===0?'#fff6d7':'#ffe3a4').multiplyScalar(brightness);bulbs.setColorAt(i,bulbColor);
         colors.set([bulbColor.r,bulbColor.g,bulbColor.b],i*3);
+        const sparkle=reduced?(i%13===0?.55:0):Math.pow(Math.max(0,Math.sin(seconds*2.25+i*2.39996)),18)*2.7;
+        bulbColor.set(i%3===0?'#e0edff':i%3===1?'#fff7d9':'#ffd59c').multiplyScalar(sparkle);glintColors.set([bulbColor.r,bulbColor.g,bulbColor.b],i*3);
       }
       if(bulbs.instanceColor)bulbs.instanceColor.needsUpdate=true;
       glowGeometry.attributes.color.needsUpdate=true;
+      glintGeometry.attributes.color.needsUpdate=true;
+      for(let i=0;i<32;i++){
+        const y=.65+((i*.183+(reduced?0:seconds*.055))%5.8),angle=i*2.39996+(reduced?0:seconds*.07),radius=radiusAt(y)+.24+Math.sin(i)*.08;
+        motePositions.set([Math.cos(angle)*radius,y,Math.sin(angle)*radius],i*3);
+      }
+      moteGeometry.attributes.position.needsUpdate=true;
       const starPulse=reduced?1:.8+.35*(Math.sin(seconds*2)*.5+.5);
       starMaterial.emissiveIntensity=starPulse*1.4;starHalo.material.opacity=starPulse*.7;
       starGlint.material.opacity=reduced?.6:.35+.65*Math.pow(Math.max(0,Math.sin(seconds*2.4)),4);

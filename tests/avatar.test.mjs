@@ -32,3 +32,21 @@ test('sitting blends gradually instead of shrinking or instantly changing the bo
  assert.ok(avatar.pose.seat>.99);
  disposeObject(avatar.group);
 });
+
+test('prayer hands meet in front of the chest and closed eyes restore on standing',()=>{
+ for(let pattern=0;pattern<5;pattern++){
+  const avatar=makeAvatar('#506878',pattern,pattern);avatar.praying=true;
+  animateAvatar(avatar,true,0,0,1,true);avatar.group.updateMatrixWorld(true);
+  const left=avatar.hands[0].getWorldPosition(new T.Vector3()),right=avatar.hands[1].getWorldPosition(new T.Vector3());
+  const chest=avatar.body.getWorldPosition(new T.Vector3());
+  assert.ok(left.distanceTo(right)<.065,'hands meet');
+  assert.ok(left.z<chest.z-.25&&right.z<chest.z-.25,'hands stay in front of torso');
+  assert.ok(left.y>chest.y+.22,'hands are raised above the lap');
+  assert.equal(avatar.eyesOpen.visible,false);assert.equal(avatar.eyesClosed.visible,true);
+  assert.equal(avatar.prayerHands.visible,true);
+  animateAvatar(avatar,false,0,0,1,true);
+  assert.equal(avatar.eyesOpen.visible,true);assert.equal(avatar.eyesClosed.visible,false);assert.equal(avatar.prayerHands.visible,false);
+  assert.equal(avatar.arms[0].rotation.y,0);
+  disposeObject(avatar.group);
+ }
+});

@@ -44,7 +44,7 @@ export function makeProjections(){
   // Additive texture projection preserves each pane's color and dark leadwork.
   for(let i=0;i<5;i++){
     const z=-13+i*5.2;
-    const material=new T.MeshBasicMaterial({map:panes[(i+1)%3],transparent:true,opacity:.27,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,toneMapped:false});
+    const material=new T.MeshBasicMaterial({map:panes[(i+1)%3],transparent:true,opacity:.36,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,toneMapped:false});
     softenGlass(material);projections.push(material);
     const patch=new T.Mesh(new T.PlaneGeometry(7.2,2.7),material);
     patch.position.set(3.35,.044,z+2.7);patch.rotation.set(-Math.PI/2,0,-.36);group.add(patch);
@@ -56,32 +56,32 @@ export function makeProjections(){
   ctx.globalCompositeOperation='destination-in';const fade=ctx.createLinearGradient(0,0,0,128);fade.addColorStop(0,'#ffffff00');fade.addColorStop(.2,'#ffffffff');fade.addColorStop(.8,'#ffffffcc');fade.addColorStop(1,'#ffffff00');ctx.fillStyle=fade;ctx.fillRect(0,0,64,128);
   const glowMap=new T.CanvasTexture(canvas);
   const axis=new T.Vector3(-.84,-.54,.3).normalize();
-  for(const z of [-7.8,2.6,7.8])for(let layer=0;layer<3;layer++){
+  for(const z of [-13,-7.8,-2.6,2.6,7.8,13])for(let layer=0;layer<3;layer++){
     const start=new T.Vector3(8.43,6.9-layer*.63,z),end=start.clone().addScaledVector(axis,10.4);
     const width=new T.Vector3(0,.2,1).normalize().applyAxisAngle(axis,layer*Math.PI/3);
-    const points=[start.clone().addScaledVector(width,-.18),start.clone().addScaledVector(width,.18),end.clone().addScaledVector(width,-.82),end.clone().addScaledVector(width,.82)];
+    const points=[start.clone().addScaledVector(width,-.23),start.clone().addScaledVector(width,.23),end.clone().addScaledVector(width,-1.05),end.clone().addScaledVector(width,1.05)];
     const beamGeometry=new T.BufferGeometry();beamGeometry.setAttribute('position',new T.Float32BufferAttribute(points.flatMap(p=>p.toArray()),3));beamGeometry.setAttribute('uv',new T.Float32BufferAttribute([0,1,1,1,0,0,1,0],2));beamGeometry.setIndex([0,2,1,2,3,1]);beamGeometry.computeVertexNormals();
-    const material=new T.MeshBasicMaterial({map:glowMap,color:layer===1?'#e0eaff':'#fff3d1',transparent:true,opacity:.075,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,toneMapped:false});
+    const material=new T.MeshBasicMaterial({map:glowMap,color:layer===1?'#e0eaff':'#fff3d1',transparent:true,opacity:.13,depthWrite:false,blending:T.AdditiveBlending,side:T.DoubleSide,toneMapped:false});
     shafts.push(material);group.add(new T.Mesh(beamGeometry,material));
   }
-  const dustGeometry=new T.BufferGeometry(),dustPositions=new Float32Array(100*3),dustBase=new Float32Array(100*3);
-  for(let i=0;i<100;i++){
+  const dustGeometry=new T.BufferGeometry(),dustPositions=new Float32Array(180*3),dustBase=new Float32Array(180*3);
+  for(let i=0;i<180;i++){
     const t=((i*37)%101)/101,z=i%2?2.6:-7.8;
     dustBase.set([8.3-t*8.4,6.4-t*5.4,z+t*3+(i%7-3)*.18],i*3);
   }
   dustPositions.set(dustBase);dustGeometry.setAttribute('position',new T.BufferAttribute(dustPositions,3));
-  const dustMaterial=new T.PointsMaterial({color:'#ffe8b4',size:.025,transparent:true,opacity:.4,depthWrite:false,blending:T.AdditiveBlending});
+  const dustMaterial=new T.PointsMaterial({color:'#ffe8b4',size:.035,transparent:true,opacity:.6,depthWrite:false,blending:T.AdditiveBlending});
   group.add(new T.Points(dustGeometry,dustMaterial));
   return {group,
     setLight(preset:'day'|'dusk'|'night',blend:number){
       const amount=preset==='night'?0:preset==='dusk'?.4:1;
-      for(const material of projections)material.opacity=T.MathUtils.lerp(material.opacity,.3*amount,blend);
-      for(const material of shafts)material.opacity=T.MathUtils.lerp(material.opacity,.075*amount,blend);
+      for(const material of projections)material.opacity=T.MathUtils.lerp(material.opacity,.36*amount,blend);
+      for(const material of shafts)material.opacity=T.MathUtils.lerp(material.opacity,.13*amount,blend);
       for(const material of glass)material.emissiveIntensity=T.MathUtils.lerp(material.emissiveIntensity,preset==='night'?.18:preset==='dusk'?.48:.83,blend);
-      dustMaterial.opacity=T.MathUtils.lerp(dustMaterial.opacity,.4*amount,blend);
+      dustMaterial.opacity=T.MathUtils.lerp(dustMaterial.opacity,.6*amount,blend);
     },
     tick(seconds:number,reduced:boolean){
-      for(let i=0;i<100;i++){
+      for(let i=0;i<180;i++){
         dustPositions[i*3]=dustBase[i*3]+(reduced?0:Math.sin(seconds*.16+i)*.06);
         dustPositions[i*3+1]=dustBase[i*3+1]+(reduced?0:Math.sin(seconds*.12+i*.6)*.12);
       }
