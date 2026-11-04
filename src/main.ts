@@ -6,6 +6,9 @@ import cathedrals from './cathedrals.json';
 function element<T extends HTMLElement>(id:string){const result=document.getElementById(id);if(!result)throw new Error('Missing element '+id);return result as T;}
 const viewport=element('viewport'), welcome=element('welcome'), controls=element('controls');
 const enter=element<HTMLButtonElement>('enter'), exit=element<HTMLButtonElement>('exit'), sit=element<HTMLButtonElement>('sit'), door=element<HTMLButtonElement>('confess');
+const header=element('header'), pointsOpen=element('points-open'), candle=element('candle');
+const quiet=element('quiet'), quietExit=element('quiet-exit'), points=element<HTMLDialogElement>('points');
+let quietView=false;
 const notice=element('notice'), retry=element<HTMLButtonElement>('retry');
 const confessional=element<HTMLDialogElement>('confessional'), thought=element<HTMLTextAreaElement>('thought');
 const panel=element<HTMLDialogElement>('audio-panel'), select=element<HTMLSelectElement>('phrase');
@@ -131,8 +134,42 @@ confessional.oncancel=(event)=>{event.preventDefault();leaveRoom();};
 confessional.onclose=()=>{thought.value='';scene?.mode('walk');door.focus();announce('본당으로 돌아왔습니다.');};
 sit.onclick=()=>scene?.sit();
 door.onclick=()=>{announce('고해소 쪽으로 이동합니다.');scene?.walkToDoor(enterRoom);};
+function updateWalkControls(){
+  const local=active&&selected==='bariloche';
+  pointsOpen.hidden=!local;
+  candle.hidden=!local;
+  candle.textContent=scene?.candleLit?'촛불 끄기':'촛불 켜기';
+  quiet.hidden=!local||!scene?.seated;
+  sit.textContent=scene?.seated?'일어나기':'앉기';
+}
+function setQuiet(on:boolean){
+  quietView=on;
+  scene?.setQuiet(on);
+  header.hidden=on;controls.hidden=on||!active;quietExit.hidden=!on;
+  if(on){notice.hidden=true;quietExit.focus();}
+  else quiet.focus();
+}
+quiet.onclick=()=>{if(active&&selected==='bariloche'&&scene?.seated)setQuiet(true);};
+quietExit.onclick=()=>setQuiet(false);
+window.addEventListener('keydown',event=>{
+  if(quietView&&event.key==='Escape'){event.preventDefault();setQuiet(false);}
+});
+candle.onclick=()=>scene?.toggleCandle(updateWalkControls);
+pointsOpen.onclick=()=>{scene?.mode('points');points.showModal();};
+element('points-close').onclick=()=>points.close();
+let nextPoint:'altar'|'glass'|undefined;
+element('point-altar').onclick=()=>{nextPoint='altar';points.close();};
+element('point-glass').onclick=()=>{nextPoint='glass';points.close();};
+points.onclose=()=>{
+  scene?.mode('walk');
+  if(nextPoint)scene?.visit(nextPoint);
+  nextPoint=undefined;
+  pointsOpen.focus();
+};
 function present(walk:boolean){
   active=walk;welcome.hidden=walk;controls.hidden=!walk;exit.hidden=!walk;scene?.mode(walk?'walk':'welcome');
+  if(quietView)setQuiet(false);
+  updateWalkControls();
 }
 async function switchScene(id:SceneId,walk:boolean,url?:string){
   if(opening)return;
@@ -158,7 +195,7 @@ enter.onclick=()=>{
   resetVoice();ambient.pause();present(true);announce((cathedrals.find(item=>item.id===selected)?.name??'성당')+'에 들어왔습니다.');sit.focus();
 };
 exit.onclick=()=>{resetVoice();ambient.pause();present(false);enter.focus();};
-window.setInterval(()=>{sit.textContent=scene?.seated?'일어나기':'앉기';},150);
+window.setInterval(updateWalkControls,150);
 refreshSceneTitle();
 if(scene)void switchScene('bariloche',false);
 updateAudio();

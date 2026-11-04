@@ -74,6 +74,37 @@ function makePrivateRoom(){
   const light=new T.PointLight('#ffcf90',20,8);light.position.set(1.85,2.15,-1.52);group.add(light);
   return group;
 }
+const barilochePoints = {
+  altar: { stop: new T.Vector3(0, 0, -10.7), view: new T.Vector3(0, 2.9, -16) },
+  glass: { stop: new T.Vector3(6.3, 0, -5.6), view: new T.Vector3(8.65, 5.95, -7.8) },
+};
+const candleStop = new T.Vector3(-6.5, 0, 12.25);
+
+function makeCandle() {
+  const stand = new T.Group();
+  stand.position.set(-7.35, 0, 12.25);
+  const brass = new T.MeshStandardMaterial({ color: '#8b6239', metalness: .65, roughness: .36 });
+  const wax = new T.MeshStandardMaterial({ color: '#efe1bc' });
+  function add(geometry: T.BufferGeometry, material: T.Material, y: number) {
+    const mesh = new T.Mesh(geometry, material);
+    mesh.position.y = y;
+    stand.add(mesh);
+    return mesh;
+  }
+  add(new T.CylinderGeometry(.18, .28, .12, 24), brass, .06);
+  add(new T.CylinderGeometry(.065, .09, .9, 16), brass, .52);
+  add(new T.CylinderGeometry(.28, .21, .08, 24), brass, 1);
+  add(new T.CylinderGeometry(.068, .074, .23, 16), wax, 1.15);
+  const flame = add(new T.SphereGeometry(.055, 16, 12), new T.MeshBasicMaterial({ color: '#ffcb72' }), 1.33);
+  flame.scale.y = 1.85;
+  flame.visible = false;
+  const glow = new T.PointLight('#ffad54', 2, 2.4);
+  glow.position.y = 1.34;
+  glow.visible = false;
+  stand.add(glow);
+  return { stand, flame, glow };
+}
+
 export class Walkthrough {
   readonly renderer:T.WebGLRenderer;
   private scene=new T.Scene();
@@ -96,7 +127,37 @@ export class Walkthrough {
   private notice:(message:string)=>void;
   private observer:ResizeObserver;
   private view='welcome';
+  private candle?: ReturnType<typeof makeCandle>;
+  private framing?: T.Vector3;
+  private quiet=false;
   seated=false;
+
+  get candleLit(){return this.candle?.flame.visible??false;}
+
+  toggleCandle(onChange:()=>void){
+    const candle=this.candle;
+    if(!candle||this.blocked)return;
+    const toggle=()=>{
+      candle.glow.visible=candle.flame.visible=!candle.flame.visible;
+      this.framing=candle.stand.position.clone().setY(1.24);
+      this.notice(this.candleLit?'촛불을 켰습니다. 잠시 머물러 보세요.':'촛불을 껐습니다.');
+      onChange();
+    };
+    if(this.position.distanceTo(candleStop)<.3){this.clear();toggle();}
+    else this.go(candleStop,toggle);
+  }
+
+  visit(point:keyof typeof barilochePoints){
+    if(!this.candle)return;
+    const {stop,view}=barilochePoints[point];
+    this.go(stop,()=>{this.framing=view;this.notice(point==='altar'?'제대 앞에 도착했습니다.':'스테인드글라스 가까이에 도착했습니다.');});
+  }
+
+  setQuiet(quiet:boolean){
+    this.quiet=quiet;
+    if(quiet&&this.seated)this.framing=barilochePoints.altar.view;
+    this.clear();
+  }
   constructor(host:HTMLElement, notice:(message:string)=>void){
     this.notice=notice;
     this.renderer=new T.WebGLRenderer({antialias:true});
@@ -135,21 +196,29 @@ export class Walkthrough {
     try{next=decode(gltf.scene);}catch(error){unload(gltf.scene);throw error;}
     if(this.place)unload(this.place.root);
     this.place=next;this.scene.add(next.root);
+    this.candle=id==='bariloche'?makeCandle():undefined;
+    if(this.candle){
+      next.root.add(this.candle.stand);
+      next.blockers.push({x:-7.35,z:12.25,width:.56,depth:.56});
+    }
+    this.framing=undefined;
+    this.quiet=false;
     this.position.copy(next.spawn);this.avatar.group.rotation.y=0;
     this.seated=false;this.yaw=0;this.pitch=.16;this.clear();
     return true;
   }
   mode(view:string){
+    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points')this.framing=undefined;
     this.view=view;this.avatar.group.visible=view==='walk';this.privateRoom.visible=view==='room';
     if(this.place)this.place.root.visible=view!=='room';
     this.clear();
   }
-  get blocked(){return this.view!=='walk'||!this.place;}
+  get blocked(){return this.view!=='walk'||!this.place||this.quiet;}
   private clear=()=>{this.keys.clear();this.path=[];this.arrival=undefined;this.pressed=undefined;};
   private keyDown=(e:KeyboardEvent)=>{
     const k=e.key.toLowerCase();
     if(this.blocked||e.altKey||e.metaKey||e.ctrlKey||!(k in keyDirections)||e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
-    e.preventDefault();this.path=[];this.arrival=undefined;this.keys.add(k);
+    e.preventDefault();this.framing=undefined;this.path=[];this.arrival=undefined;this.keys.add(k);
   };
   private keyUp=(e:KeyboardEvent)=>{this.keys.delete(e.key.toLowerCase());};
   private pointerDown=(e:PointerEvent)=>{if(this.blocked||e.button!==0)return;this.pressed={x:e.clientX,y:e.clientY,drag:false};this.renderer.domElement.setPointerCapture(e.pointerId);};
@@ -157,6 +226,7 @@ export class Walkthrough {
     if(!this.pressed)return;
     const dx=e.clientX-this.pressed.x,dy=e.clientY-this.pressed.y;
     if(!this.pressed.drag&&Math.hypot(dx,dy)<5)return;
+    this.framing=undefined;
     this.yaw-=dx*.006;this.pitch=T.MathUtils.clamp(this.pitch+dy*.005,-.2,.65);
     this.pressed={x:e.clientX,y:e.clientY,drag:true};
   };
@@ -170,7 +240,7 @@ export class Walkthrough {
     if(target)this.go(target);
   };
   private pointerCancel=()=>{this.pressed=undefined;};
-  private wheel=(e:WheelEvent)=>{if(this.blocked)return;e.preventDefault();this.distance=T.MathUtils.clamp(this.distance+e.deltaY*.005,2.4,6.6);};
+  private wheel=(e:WheelEvent)=>{if(this.blocked)return;e.preventDefault();this.framing=undefined;this.distance=T.MathUtils.clamp(this.distance+e.deltaY*.005,2.4,6.6);};
   private valid(x:number,z:number,pad=radius){
     if(!this.place)return false;
     const [left,right,front,back]=this.place.bounds;
@@ -216,7 +286,7 @@ export class Walkthrough {
   }
   private go(target:T.Vector3, onArrival?:()=>void){
     if(this.blocked)return;
-    this.seated=false;this.clear();
+    this.seated=false;this.framing=undefined;this.clear();
     if(this.position.distanceTo(target)<.18){onArrival?.();return;}
     this.path=this.route(target);
     if(!this.path.length){this.notice('이동할 수 있는 바닥을 선택해 주세요.');return;}
@@ -224,9 +294,9 @@ export class Walkthrough {
   }
   sit(){
     if(this.blocked||!this.place)return;
-    if(this.seated){this.seated=false;this.notice('일어났습니다.');return;}
+    if(this.seated){this.seated=false;this.framing=undefined;this.notice('일어났습니다.');return;}
     const nearest=[...this.place.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
-    this.go(nearest,()=>{this.seated=true;this.avatar.group.rotation.y=0;this.notice('잠시 앉아 쉬어가세요.');});
+    this.go(nearest,()=>{this.seated=true;if(this.candle)this.framing=barilochePoints.altar.view;this.avatar.group.rotation.y=0;this.notice('잠시 앉아 쉬어가세요.');});
   }
   walkToDoor(enter:()=>void){if(this.place)this.go(this.place.door,enter);}
   private move(dx:number,dz:number){
@@ -256,6 +326,10 @@ export class Walkthrough {
       this.camera.position.set(-2.25,2.65,16.9);this.camera.lookAt(2.5,3.55,-15);
     }else if(this.view==='room'){
       this.camera.position.set(28.15,1.43,2.47);this.camera.lookAt(30.05,1.24,-2.2);
+    }else if(this.framing){
+      const eye=this.position.clone().setY(this.seated?1.28:1.63);
+      this.camera.position.copy(eye);
+      this.camera.lookAt(this.framing);
     }else{
       const center=this.position.clone().add(new T.Vector3(0,this.seated?.87:1.22,0));
       const cameraOffset=new T.Vector3(Math.sin(this.yaw),this.pitch+.19,Math.cos(this.yaw));
@@ -263,6 +337,7 @@ export class Walkthrough {
       while(distance>.65&&!this.valid(center.x+cameraOffset.x*distance,center.z+cameraOffset.z*distance,.12))distance-=.16;
       this.camera.position.copy(center).addScaledVector(cameraOffset,distance);this.camera.lookAt(center.clone().add(new T.Vector3(0,.43,0)));
     }
+    this.avatar.group.visible=this.view==='walk'&&!this.framing;
     this.renderer.render(this.scene,this.camera);this.frame=requestAnimationFrame(this.tick);
   };
   dispose(){
