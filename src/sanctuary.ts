@@ -1,4 +1,5 @@
 import * as T from 'three';
+import {makeAvatar} from './avatar';
 
 // Code-made materials and meshes; original stained-glass artwork is in stainedglass.ts.
 function texture(draw:(context:CanvasRenderingContext2D,size:number)=>void,size=256){
@@ -12,44 +13,7 @@ function texture(draw:(context:CanvasRenderingContext2D,size:number)=>void,size=
 function mesh(parent:T.Object3D,geometry:T.BufferGeometry,material:T.Material,position:[number,number,number]){
   const result=new T.Mesh(geometry,material);result.position.set(...position);parent.add(result);return result;
 }
-export function makeAvatar(color='#344c60'){
-  const group=new T.Group(),rig=new T.Group();group.add(rig);
-  const cloth=new T.MeshStandardMaterial({color,roughness:.93});
-  const skin=new T.MeshStandardMaterial({color:'#d5b697',roughness:.85});
-  const hair=new T.MeshStandardMaterial({color:'#302825'});
-  mesh(rig,new T.CylinderGeometry(.19,.37,.94,24),cloth,[0,.8,0]);
-  mesh(rig,new T.SphereGeometry(.235,24,16),skin,[0,1.48,0]);
-  mesh(rig,new T.SphereGeometry(.241,24,16,0,Math.PI*2,0,Math.PI*.57),hair,[0,1.51,.02]);
-  const eyeMaterial=new T.MeshBasicMaterial({color:'#342c29'});
-  for(const x of [-.082,.082])mesh(rig,new T.SphereGeometry(.017,8,8),eyeMaterial,[x,1.49,-.218]);
-  const arms=[-.25,.25].map(x=>{
-    const arm=new T.Group();arm.position.set(x,1.13,0);rig.add(arm);
-    mesh(arm,new T.CapsuleGeometry(.075,.27,4,10),cloth,[0,-.15,0]);
-    mesh(arm,new T.SphereGeometry(.071,10,10),skin,[0,-.36,0]);
-    return arm;
-  });
-  const hand=new T.Group();hand.position.set(0,-.37,-.045);arms[1].add(hand);
-  const legs=[-.13,.13].map(x=>mesh(rig,new T.CapsuleGeometry(.08,.25,4,10),hair,[x,.24,0]));
-  const lace=texture((ctx,s)=>{
-    ctx.clearRect(0,0,s,s);ctx.fillStyle='#eee6ce';
-    ctx.globalAlpha=.18;ctx.fillRect(0,0,s,s);ctx.globalAlpha=.85;
-    for(let y=8;y<s;y+=32)for(let x=8;x<s;x+=32){
-      ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();
-      for(let p=0;p<5;p++){
-        const angle=p*Math.PI*2/5;
-        ctx.beginPath();ctx.ellipse(x+Math.cos(angle)*7,y+Math.sin(angle)*7,4,2,angle,0,Math.PI*2);ctx.fill();
-      }
-    }
-  });
-  const veil=new T.Group();rig.add(veil);veil.visible=false;
-  const veilMaterial=new T.MeshStandardMaterial({color:'#f5e9cf',map:lace,transparent:true,opacity:.82,side:T.DoubleSide,depthWrite:false,roughness:1});
-  mesh(veil,new T.SphereGeometry(.254,28,16,0,Math.PI*2,0,Math.PI*.57),veilMaterial,[0,1.51,.02]);
-  const drape=mesh(veil,new T.CylinderGeometry(.245,.38,.7,32,12,true,Math.PI*.08,Math.PI*1.84),veilMaterial,[0,1.15,.055]);
-  drape.rotation.y=Math.PI;
-  const gold=new T.MeshStandardMaterial({color:'#bda06b',metalness:.6,roughness:.5});
-  const border=mesh(veil,new T.TorusGeometry(.38,.008,6,48,Math.PI*1.84),gold,[0,.8,.055]);border.rotation.x=Math.PI/2;
-  return {group,rig,arms,hand,legs,veil};
-}
+export {makeAvatar,animateAvatar,avatarPatterns} from './avatar';
 export function makeTaper(){
   const root=new T.Group();
   const wax=new T.MeshStandardMaterial({color:'#f5e4b8',roughness:.82});
@@ -189,7 +153,7 @@ export function makeChoir(){
     for(let column=0;column<5;column++){
       const person=makeAvatar(column%2?'#6b303b':'#753d43');person.group.scale.setScalar(.62);
       person.group.position.set(-2.3+column*1.15,1.25+row*.5,-16.6-row*.8);person.group.rotation.y=Math.PI;
-      mesh(person.rig,new T.ConeGeometry(.31,.26,3),white,[0,1.04,0]);
+      mesh(person.rig,new T.ConeGeometry(.31,.26,3),white,[0,.4,0]);
       person.arms.forEach(arm=>arm.rotation.x=.65);
       person.veil.visible=false;group.add(person.group);people.push(person);
     }
@@ -340,4 +304,50 @@ export function makeWallCandles(){
     taper.halo.scale.set(.55,.7,1);group.add(taper.root);tapers.push(taper);
   }
   return {group,tapers};
+}
+
+export function makeEntrance(){
+  const group=new T.Group();group.name='grand-cathedral-entrance';group.position.set(.1,0,18.68);group.rotation.y=Math.PI;
+  const stone=new T.MeshStandardMaterial({color:'#b6a58b',roughness:.87});
+  const wood=new T.MeshStandardMaterial({color:'#54372a',roughness:.58});
+  const inset=new T.MeshStandardMaterial({color:'#38261f',roughness:.77});
+  const bronze=new T.MeshStandardMaterial({color:'#a98b55',metalness:.75,roughness:.33});
+  const black=new T.MeshStandardMaterial({color:'#302b28',metalness:.7,roughness:.45});
+  const shape=new T.Shape();shape.moveTo(-2.35,0);shape.lineTo(2.35,0);shape.lineTo(2.35,4.65);shape.quadraticCurveTo(1.9,5.9,0,6.65);shape.quadraticCurveTo(-1.9,5.9,-2.35,4.65);shape.closePath();
+  mesh(group,new T.ExtrudeGeometry(shape,{depth:.12,bevelEnabled:false,curveSegments:28}),wood,[0,.08,0]);
+  for(const side of [-1,1]){
+    mesh(group,new T.BoxGeometry(.38,4.9,.5),stone,[side*2.58,2.45,.02]);
+    mesh(group,new T.BoxGeometry(.64,.25,.72),stone,[side*2.58,.13,.03]);
+    mesh(group,new T.BoxGeometry(.6,.26,.64),stone,[side*2.58,4.6,.03]);
+    mesh(group,new T.BoxGeometry(2.18,4.46,.1),inset,[side*1.14,2.36,.16]);
+    for(let plank=0;plank<7;plank++)mesh(group,new T.BoxGeometry(.018,4.3,.025),wood,[side*1.14-.94+plank*.313,2.36,.22]);
+    for(let row=0;row<3;row++){
+      const y=.94+row*1.32;
+      mesh(group,new T.BoxGeometry(1.79,1.08,.04),wood,[side*1.14,y,.23]);
+      for(const offset of [-.57,.57])mesh(group,new T.BoxGeometry(.055,1.16,.035),bronze,[side*1.14+offset,y,.26]);
+      for(const edge of [-.55,.55])mesh(group,new T.BoxGeometry(1.86,.055,.035),bronze,[side*1.14,y+edge,.26]);
+    }
+    for(const y of [.6,2.3,4.15]){
+      mesh(group,new T.BoxGeometry(1.5,.09,.07),black,[side*1.48,y,.3]);
+      for(let rivet=0;rivet<5;rivet++)mesh(group,new T.SphereGeometry(.027,8,6),bronze,[side*1.48-.6+rivet*.3,y,.35]);
+    }
+    mesh(group,new T.BoxGeometry(.15,.44,.06),bronze,[side*.24,2.1,.34]);
+    const handle=mesh(group,new T.TorusGeometry(.105,.023,8,24),bronze,[side*.24,2.1,.4]);handle.rotation.x=.15;
+  }
+  mesh(group,new T.BoxGeometry(.08,4.55,.12),bronze,[0,2.35,.27]);
+  for(let ring=0;ring<3;ring++){
+    const points:T.Vector3[]=[];
+    for(let i=0;i<=48;i++){const x=-2.35+i/48*4.7;points.push(new T.Vector3(x*(1+ring*.063),4.65+(1.99+ring*.14)*(1-Math.pow(Math.abs(x/2.35),1.5)),.05));}
+    mesh(group,new T.TubeGeometry(new T.CatmullRomCurve3(points),64,.12,8,false),stone,[0,0,0]);
+  }
+  const glass=new T.MeshStandardMaterial({color:'#bfa66d',emissive:'#806b3b',emissiveIntensity:.24,roughness:.45});
+  const arch=new T.Shape();arch.moveTo(-1.88,4.85);arch.lineTo(1.88,4.85);arch.quadraticCurveTo(1.35,5.81,0,6.28);arch.quadraticCurveTo(-1.35,5.81,-1.88,4.85);arch.closePath();
+  mesh(group,new T.ShapeGeometry(arch,28),glass,[0,0,.18]);
+  for(let i=0;i<7;i++){
+    const x=-1.5+i*.5,top=6.2-Math.abs(x)*.54;
+    mesh(group,new T.BoxGeometry(.035,top-4.85,.04),bronze,[x,(top+4.85)/2,.24]);
+  }
+  mesh(group,new T.BoxGeometry(4.1,.08,.07),bronze,[0,4.81,.26]);
+  mesh(group,new T.BoxGeometry(5.35,.07,.85),stone,[0,.035,.25]);
+  return group;
 }

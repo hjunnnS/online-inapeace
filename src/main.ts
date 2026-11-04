@@ -356,7 +356,7 @@ function updateWalkControls(){
   candle.toggleAttribute('disabled',!!scene?.effect);
   if(qa){
     const status=element('qa-status');status.hidden=false;
-    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,totalVisitors:scene?.totalVisitorCount,movingVisitors:scene?.movingVisitorStatus,veiledWorshippers:scene?.veiledWorshipperCount,wallCandles:scene?.wallCandleCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
+    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,totalVisitors:scene?.totalVisitorCount,characterPatterns:scene?.characterPatterns,playerSeatPose:scene?.playerSeatPose,movingVisitors:scene?.movingVisitorStatus,veiledWorshippers:scene?.veiledWorshipperCount,wallCandles:scene?.wallCandleCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
   }
   const locations=scene?.hotspots()??[];
   for(const button of hotspots.querySelectorAll<HTMLButtonElement>('button'))button.hidden=true;
@@ -395,9 +395,10 @@ window.addEventListener('keydown',event=>{
 candle.onclick=()=>scene?.toggleCandle(updateWalkControls);
 pointsOpen.onclick=()=>{scene?.mode('points');points.showModal();};
 element('points-close').onclick=()=>points.close();
-let nextPoint:'altar'|'glass'|'tree'|undefined;
+let nextPoint:'altar'|'glass'|'tree'|'entrance'|undefined;
 element('point-altar').onclick=()=>{nextPoint='altar';points.close();};
 element('point-glass').onclick=()=>{nextPoint='glass';points.close();};
+element('point-entrance').onclick=()=>{nextPoint='entrance';points.close();};
 element('point-tree').onclick=()=>{nextPoint='tree';points.close();};
 points.onclose=()=>{
   scene?.mode('walk');
