@@ -1,4 +1,5 @@
 import * as T from 'three';
+import { VisitingPeople } from './visitors';
 import { disposeObject as unload } from './resources';
 import { makeAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, makeChristmasTree, makeWallCandles, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -94,6 +95,7 @@ export class Walkthrough {
   private christmasTree?:ReturnType<typeof makeChristmasTree>;
   private choir?:ReturnType<typeof makeChoir>;
   private backgroundPeople:{avatar:ReturnType<typeof makeAvatar>;seated:boolean;phase:number;taper?:Taper}[]=[];
+  private visitors?:VisitingPeople;
   private choirPlaying=false;
   private conductBeat=0;
   setChoirPlaying(playing:boolean){this.choirPlaying=playing;}
@@ -143,6 +145,8 @@ export class Walkthrough {
   onSound:(name:'candle'|'sit'|'room'|'release')=>void=()=>{};
 
   get worshipperCount(){return this.backgroundPeople.length;}
+  get movingVisitorStatus(){return this.visitors?.status??[];}
+  get totalVisitorCount(){return this.backgroundPeople.length+(this.visitors?.people.length??0);}
   get veiledWorshipperCount(){return this.backgroundPeople.filter(person=>person.avatar.veil.visible).length;}
   get wallCandleCount(){return this.wallCandles?.tapers.length??0;}
   get treePresent(){return !!this.christmasTree;}
@@ -291,7 +295,7 @@ export class Walkthrough {
     try{next=decode(gltf.scene);}catch(error){unload(gltf.scene);throw error;}
     this.skipEffect();
     if(this.carried)unload(this.carried.root);
-    this.carried=undefined;this.placed=[];this.markers=[];this.backgroundPeople=[];this.choirPlaying=false;this.avatar.veil.visible=false;
+    this.carried=undefined;this.placed=[];this.markers=[];this.backgroundPeople=[];this.visitors=undefined;this.choirPlaying=false;this.avatar.veil.visible=false;
     this.handLight.visible=false;
     if(this.place)unload(this.place.root);
     this.place=next;this.scene.add(next.root);
@@ -313,6 +317,10 @@ export class Walkthrough {
         avatar.group.scale.setScalar(.94);avatar.group.rotation.y=0;next.root.add(avatar.group);
         this.backgroundPeople.push({avatar,seated,phase:i});
       }
+      const freeSeats=next.seats.filter(seat=>!this.backgroundPeople.some(person=>person.seated&&person.avatar.group.position.distanceToSquared(seat)<.1));
+      const homes=freeSeats.filter((_,index)=>index%2===0).slice(0,3);
+      this.visitors=new VisitingPeople(homes,new T.Vector3(0,0,-11.1),new T.Vector3(6.15,0,11.85),(target,start,avoid=[])=>this.route(target,start,[...avoid,...this.backgroundPeople.filter(person=>!person.seated).map(person=>person.avatar.group.position)]),(x,z)=>this.valid(x,z)&&!this.backgroundPeople.some(person=>!person.seated&&Math.hypot(x-person.avatar.group.position.x,z-person.avatar.group.position.z)<.55));
+      next.root.add(this.visitors.root);
       next.root.add(this.candle.group);
       next.blockers.push({x:6.15,z:13.25,width:1.9,depth:.8});
       this.wallCandles=makeWallCandles();next.root.add(this.wallCandles.group);
@@ -375,8 +383,9 @@ export class Walkthrough {
     if(x<left+pad||x>right-pad||z<front+pad||z>back-pad)return false;
     return !this.place.blockers.some(b=>Math.abs(x-b.x)<b.width/2+pad&&Math.abs(z-b.z)<b.depth/2+pad);
   }
-  private route(target:T.Vector3){
-    if(!this.place||!this.valid(target.x,target.z))return [];
+  private route(target:T.Vector3,start=this.position,avoid:T.Vector3[]=[]){
+    const valid=(x:number,z:number)=>this.valid(x,z)&&!avoid.some(point=>Math.hypot(x-point.x,z-point.z)<.62);
+    if(!this.place||!valid(target.x,target.z))return [];
     const [left,right,front,back]=this.place.bounds;
     const width=Math.ceil((right-left)/step), depth=Math.ceil((back-front)/step);
     const cell=(x:number,z:number)=>z*width+x;
@@ -387,11 +396,11 @@ export class Walkthrough {
       for(let dz=-2;dz<=2;dz++)for(let dx=-2;dx<=2;dx++){
         if(x+dx<0||x+dx>=width||z+dz<0||z+dz>=depth)continue;
         const i=cell(x+dx,z+dz),q=point(i),dist=q.distanceToSquared(p);
-        if(dist<best&&this.valid(q.x,q.z)){found=i;best=dist;}
+        if(dist<best&&valid(q.x,q.z)){found=i;best=dist;}
       }
       return found;
     };
-    const source=closest(this.position),end=closest(target);
+    const source=closest(start),end=closest(target);
     if(source<0||end<0)return [];
     const prev=new Int32Array(width*depth).fill(-1);prev[source]=source;
     const queue=[source];
@@ -400,9 +409,9 @@ export class Walkthrough {
       for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
         if(x+dx<0||x+dx>=width||z+dz<0||z+dz>=depth)continue;
         const n=cell(x+dx,z+dz),p=point(n);
-        if(prev[n]!==-1||!this.valid(p.x,p.z))continue;
+        if(prev[n]!==-1||!valid(p.x,p.z))continue;
         const mid=p.clone().lerp(point(i),.5);
-        if(!this.valid(mid.x,mid.z))continue;
+        if(!valid(mid.x,mid.z))continue;
         prev[n]=i;queue.push(n);
       }
     }
@@ -423,7 +432,7 @@ export class Walkthrough {
   sit(){
     if(this.blocked||!this.place)return;
     if(this.seated){this.seated=false;this.cinematic=false;this.framing=undefined;this.notice('일어났습니다.');return;}
-    const nearest=this.place.seats.filter(seat=>!this.backgroundPeople.some(person=>person.seated&&person.avatar.group.position.distanceToSquared(seat)<.1)).sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
+    const nearest=this.place.seats.filter(seat=>!this.backgroundPeople.some(person=>person.seated&&person.avatar.group.position.distanceToSquared(seat)<.1)&&!this.visitors?.reservedSeats.some(home=>home.distanceToSquared(seat)<.1)).sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
     if(!nearest){this.notice('빈 좌석이 없습니다.');return;}
     this.go(nearest,()=>{this.seated=true;if(this.candle){this.cinematic=true;this.framing=barilochePoints.altar.view;}this.onSound('sit');this.avatar.group.rotation.y=0;this.notice('잠시 앉아 쉬어가세요.');});
   }
@@ -457,6 +466,7 @@ export class Walkthrough {
 
       }
     }
+    this.visitors?.tick(delta,seconds,this.reducedMotion||!['walk','welcome'].includes(this.view),this.position);
     this.christmasTree?.tick(seconds,this.reducedMotion);
     this.wallCandles?.tapers.forEach((taper,i)=>flicker(taper,seconds,i*1.7,this.reducedMotion));
     if(this.candle){
