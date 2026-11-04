@@ -1,4 +1,6 @@
 import './style.css';
+import { readPreferences, writePreferences, type Preferences } from './preferences';
+import { PrayerJourney } from './intent';
 import { RhythmSession, directions, songDuration, type Direction } from './rhythm';
 import { Walkthrough, type LightPreset, type SceneId } from './scene';
 import carols from './carols.json';
@@ -22,7 +24,6 @@ const ambientVolume=element<HTMLInputElement>('ambient-volume');
 const musicProgress=element<HTMLProgressElement>('music-progress'), musicPosition=element('music-position');
 const musicTitle=element('music-title');
 const backgroundToggle=element<HTMLButtonElement>('background-toggle');
-const backgroundQuick=element<HTMLButtonElement>('background-quick');
 const backgroundInfo=element('background-info'), backgroundStatus=element('background-status');
 const reflectionOpen=element('reflection-open'), reflection=element<HTMLDialogElement>('reflection');
 const lightPreset=element<HTMLSelectElement>('light-preset'), beadStatus=element('bead-status');
@@ -56,7 +57,10 @@ const ambient=new Audio(new URL(carols[currentTrack].file,location.href).href);
 ambient.preload='metadata';ambient.loop=false;ambient.volume=0;
 let active=false, loaded=false, opening=false, noticeTimer=0, scene:Walkthrough|undefined;
 const qa=new URLSearchParams(location.search).has('qa');
-let selected:SceneId='bariloche';
+let preferences:Preferences;
+try{preferences=readPreferences(localStorage,cathedrals.map(item=>item.id));}catch{preferences=readPreferences({getItem:()=>null},[]);}
+ambientVolume.value=String(preferences.volume);
+let selected:SceneId=preferences.favorite??'bariloche';
 let retryWalk=false;
 let audioProblem='';
 const catalog=element<HTMLDialogElement>('catalog');
@@ -85,7 +89,8 @@ function actionSound(name:string){
   void audio.play().catch(()=>{});
 }
 function stopActionSounds(){for(const sound of actionSounds.values()){sound.pause();sound.currentTime=0;}}
-effectVolume.oninput=()=>{if(!Number(effectVolume.value))stopActionSounds();};
+effectVolume.value=String(preferences.effects);
+effectVolume.oninput=()=>{preferences.effects=Number(effectVolume.value);saveSettings();if(!Number(effectVolume.value))stopActionSounds();};
 function stopChoir(){
   choirVersion++;choirAudio.pause();choirAudio.currentTime=0;choirOn=false;
   scene?.setChoirPlaying(false);choirStatus.textContent='공연을 멈췄습니다.';
@@ -93,7 +98,7 @@ function stopChoir(){
 }
 function exitGame(){stopChoir();syncBackground();choirOpen.focus();}
 async function playChoir(conduct:boolean){
-  stopChoir();
+  stopLiturgy();endPrayer(false);stopChoir();
   if(!Number(ambientVolume.value))ambientVolume.value='0.5';
   const version=++choirVersion;
   choirOn=true;scene?.setChoirPlaying(true);syncBackground();
@@ -140,7 +145,8 @@ function tickChoir(){
   const now=performance.now();
   if(now-musicTick>100){
     const factor=game?.6:Math.min(1,Math.max(.16,1-(scene?.choirDistance??0)/35));
-    choirAudio.volume=Number(ambientVolume.value)*factor;
+    const liturgyGain=liturgyElapsed===undefined?1:Math.min(1,Math.max(0,(liturgyElapsed-12)/1.2),Math.max(0,(48-liturgyElapsed)/2));
+    choirAudio.volume=Number(ambientVolume.value)*factor*liturgyGain;
     musicTick=now;
   }
   if(game&&gameRunning&&!choirAudio.paused){
@@ -217,6 +223,8 @@ for(const [index,item] of cathedrals.entries()){
   row.append(button,source);catalogList.append(row);
 }
 function refreshSceneTitle(){
+  element('point-entrance').innerHTML=selected==='bariloche'?'대형 출입문<small>트리 옆 석조 아치와 목재 양문을 바라봅니다.</small>':'입구 쪽<small>본당 뒤편에서 공간을 천천히 바라봅니다.</small>';
+
   const index=cathedrals.findIndex(item=>item.id===selected);
   const item=cathedrals[index];
   element('scene-name').textContent=item?.name??'검증용 임시 공간';
@@ -267,8 +275,6 @@ function backgroundError(){
 function syncBackground(){
   const version=++backgroundVersion;
   backgroundToggle.textContent=backgroundOn?'배경 소리 끄기':'배경 소리 켜기';
-  backgroundQuick.textContent=backgroundOn?'♪ 배경음 끄기':'♪ 배경음 켜기';
-  backgroundQuick.setAttribute('aria-pressed',String(backgroundOn));
   ambient.volume=Number(ambientVolume.value);
   const track=carols[currentTrack];
   musicTitle.textContent=track.title;
@@ -289,7 +295,7 @@ function syncBackground(){
   });
 }
 
-backgroundQuick.onclick=backgroundToggle.onclick=()=>{
+backgroundToggle.onclick=()=>{
   backgroundOn=!backgroundOn;
   if(backgroundOn&&Number(ambientVolume.value)===0)ambientVolume.value='0.5';
   if(backgroundOn){failedTracks.clear();if(ambient.error){nextBackground();return;}}
@@ -297,7 +303,7 @@ backgroundQuick.onclick=backgroundToggle.onclick=()=>{
 };
 ambientVolume.oninput=()=>{
   backgroundOn=Number(ambientVolume.value)>0;
-  syncBackground();
+  preferences.volume=Number(ambientVolume.value);saveSettings();syncBackground();
 };
 ambient.onerror=backgroundError;
 ambient.onended=nextBackground;
@@ -306,7 +312,7 @@ element('music-next').onclick=()=>{failedTracks.clear();nextBackground();};
 element('audio-open').onclick=()=>{scene?.mode('audio');panel.showModal();};
 element('audio-close').onclick=()=>panel.close();
 panel.onclose=()=>{scene?.mode(active?'walk':'welcome');};
-document.addEventListener('visibilitychange',()=>{if(document.hidden){stopChoir();stopActionSounds();scene?.skipEffect();}syncBackground();});
+document.addEventListener('visibilitychange',()=>{experienceLast=performance.now();if(document.hidden){if(liturgyElapsed!==undefined&&liturgyPhase===1){choirAudio.pause();liturgyAudioPaused=true;}else stopChoir();stopActionSounds();scene?.skipEffect();}syncBackground();});
 window.addEventListener('pagehide',()=>{thought.value='';stopChoir();stopActionSounds();scene?.skipEffect();backgroundOn=false;syncBackground();if(confessional.open)confessional.close();});
 window.addEventListener('pageshow',()=>{thought.value='';if(confessional.open)confessional.close();});
 
@@ -316,13 +322,14 @@ function announce(message:string,duration=3000){
 }
 function enterRoom(){
   if(confessional.open||!active)return;
-  stopChoir();scene?.onSound('room');scene?.mode('room');thought.value='';confessional.showModal();syncBackground();thought.focus();
+  stopLiturgy();stopChoir();scene?.onSound('room');scene?.mode('room');thought.value='';confessional.showModal();syncBackground();thought.focus();
 }
 function leaveRoom(){
   thought.value='';
   if(confessional.open)confessional.close();
 }
 function finishRelease(){
+  resumePrayerAfterRoom();
   releasing=false;effectPanel.hidden=true;header.hidden=false;controls.hidden=!active;scene?.mode(active?'walk':'welcome');
   if(active){door.focus();announce('본당으로 돌아왔습니다.');}
   syncBackground();
@@ -338,25 +345,28 @@ confessional.onclose=()=>{
   thought.value='';
   if(releasing){
     effectPanel.hidden=false;header.hidden=true;controls.hidden=true;scene?.releaseThought(finishRelease);element('effect-skip').focus();
-  }else{scene?.mode('walk');door.focus();syncBackground();announce('본당으로 돌아왔습니다.');}
+  }else{scene?.mode('walk');resumePrayerAfterRoom();door.focus();syncBackground();announce('본당으로 돌아왔습니다.');}
 };
 veil.onclick=()=>scene?.toggleVeil();
-reducedMotion.onchange=()=>{scene?.setReducedMotion(reducedMotion.checked);document.body.classList.toggle('reduce-motion',reducedMotion.checked);};
+reducedMotion.onchange=()=>{scene?.setReducedMotion(reducedMotion.checked);document.body.classList.toggle('reduce-motion',reducedMotion.checked);preferences.reduced=reducedMotion.checked;saveSettings();};
 sit.onclick=()=>scene?.sit();
 door.onclick=()=>{announce('고해소 쪽으로 이동합니다.');scene?.walkToDoor(enterRoom);};
 function updateWalkControls(){
-  const local=active&&selected==='bariloche';
+  const local=active,bariloche=selected==='bariloche';
   element('background-note').hidden=!local;
-  backgroundQuick.hidden=!active;
+  element('background-note').textContent=bariloche?'가상 신자 20명과 오가는 방문자 3명':'조용히 기도하는 가상 방문자 4명';
   pointsOpen.hidden=!local;
-  reflectionOpen.hidden=!local;choirOpen.hidden=!local;photoOpen.hidden=!local;
+  reflectionOpen.hidden=!local;choirOpen.hidden=!local||!bariloche;photoOpen.hidden=!local;
+  element('liturgy-open').hidden=!bariloche;
+  element('point-tree').hidden=!bariloche;
+  element('experience-scope').textContent=bariloche?'촛불과 기도, 성가대와 집전 장면을 천천히 만나보세요.':'공통 기도 체험을 위한 간략 재구성 공간입니다. 성가대·집전 장면·트리는 바릴로체 전용입니다.';
   veil.hidden=!local;
   veil.textContent=scene?.veilOn?'미사포 벗기':'미사포 쓰기';
   veil.disabled=!!scene?.effect;
   candle.toggleAttribute('disabled',!!scene?.effect);
   if(qa){
     const status=element('qa-status');status.hidden=false;
-    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,totalVisitors:scene?.totalVisitorCount,characterPatterns:scene?.characterPatterns,hairPatterns:scene?.hairPatterns,prayer:scene?.prayerCounts,playerSeatPose:scene?.playerSeatPose,movingVisitors:scene?.movingVisitorStatus,veiledWorshippers:scene?.veiledWorshipperCount,wallCandles:scene?.wallCandleCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
+    status.textContent=JSON.stringify({scene:selected,active,loaded,opening,seated:scene?.seated,navigating:scene?.navigating,playerPraying:scene?.playerPraying,prayerStage:journey?.stage,prayerRemaining:journey?.remaining,liturgy:liturgyElapsed,position:scene?.position.toArray(),veil:scene?.veilOn,holding:scene?.holdingCandle,placed:scene?.placedCandles,effect:scene?.effect,frameMs:scene?.frameTime,drawCalls:scene?.drawCalls,geometries:scene?.geometries,textures:scene?.textures,currentCarol:carols[currentTrack].id,carolCount:carols.length,worshippers:scene?.worshipperCount,totalVisitors:scene?.totalVisitorCount,characterPatterns:scene?.characterPatterns,hairPatterns:scene?.hairPatterns,prayer:scene?.prayerCounts,playerSeatPose:scene?.playerSeatPose,movingVisitors:scene?.movingVisitorStatus,veiledWorshippers:scene?.veiledWorshipperCount,wallCandles:scene?.wallCandleCount,tree:scene?.treePresent,choirPlaying:!choirAudio.paused,game:gameRunning,gameHits:game?.hits??0,gameTime:choirAudio.currentTime,backgroundPlaying:!ambient.paused,backgroundTime:ambient.currentTime,backgroundLoop:ambient.loop,backgroundVolume:ambient.volume,room:confessional.open});
   }
   const locations=scene?.hotspots()??[];
   for(const button of hotspots.querySelectorAll<HTMLButtonElement>('button'))button.hidden=true;
@@ -386,7 +396,7 @@ function setQuiet(on:boolean){
   if(on){notice.hidden=true;quietExit.focus();}
   else quiet.focus();
 }
-quiet.onclick=()=>{if(active&&selected==='bariloche'&&scene?.seated)setQuiet(true);};
+quiet.onclick=()=>{if(active&&scene?.seated)setQuiet(true);};
 quietExit.onclick=()=>setQuiet(false);
 window.addEventListener('keydown',event=>{
   if(event.key==='Escape'&&scene?.effect){event.preventDefault();scene.skipEffect();}
@@ -416,7 +426,7 @@ beadNext.onclick=()=>{
   if(!reducedMotion.checked)rosarySvg.animate([{transform:'translateY(0)'},{transform:'translateY(6px)'},{transform:'translateY(0)'}],{duration:280});
 };
 element('bead-reset').onclick=()=>{beadIndex=0;updateBeads();};
-lightPreset.onchange=()=>scene?.setLighting(lightPreset.value as LightPreset);
+lightPreset.onchange=()=>{preferences.light=lightPreset.value as LightPreset;scene?.setLighting(preferences.light);saveSettings();};
 reflectionOpen.onclick=()=>{scene?.mode('reflection');reflection.showModal();};
 element('reflection-close').onclick=()=>reflection.close();
 reflection.onclose=()=>{scene?.mode('walk');reflectionOpen.focus();};
@@ -429,11 +439,12 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
   if(opening)return;
   if(!scene){announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);return;}
   opening=true;retry.hidden=true;enter.disabled=enterSound.disabled=true;
-  stopChoir();stopActionSounds();ambient.pause();scene.mode('loading');announce('공간을 불러오는 중…',0);
+  endPrayer(false);stopLiturgy();stopChoir();stopActionSounds();ambient.pause();scene.mode('loading');announce('공간을 불러오는 중…',0);
   try{
     if(await scene.load(id,url)){
       selected=id;loaded=true;refreshSceneTitle();
-      lightPreset.value='day';beadIndex=0;updateBeads();
+      lightPreset.value=preferences.light;scene.setLighting(preferences.light);beadIndex=0;updateBeads();
+      updateFavorite();
       present(walk);
       notice.hidden=true;
       if(walk)announce((cathedrals.find(item=>item.id===id)?.name??'전환 검증용 임시 공간')+'에 들어왔습니다.');
@@ -444,14 +455,99 @@ async function switchScene(id:SceneId,walk:boolean,url?:string){
     retry.onclick=()=>void switchScene(id,retryWalk);
   }finally{opening=false;enter.disabled=enterSound.disabled=false;if(active)syncBackground();}
 }
-try{scene=new Walkthrough(viewport,announce);scene.onSound=actionSound;reducedMotion.checked=scene.motionReduced;}
+// Only environmental preferences are persisted. Private writing remains in the textarea.
+function saveSettings(){
+  let saved=false;try{saved=writePreferences(localStorage,preferences);}catch{}
+  element('preference-status').textContent=saved?'이 기기에 즐겨찾기와 환경 설정을 기억했습니다.':'이 브라우저에서 설정을 저장할 수 없습니다. 이번 방문에는 적용됩니다.';
+}
+function updateFavorite(){const button=element('favorite');button.textContent=preferences.favorite===selected?'★ 즐겨찾기 해제':'☆ 이 성당을 즐겨찾기';button.setAttribute('aria-pressed',String(preferences.favorite===selected));}
+element('favorite').onclick=()=>{preferences.favorite=preferences.favorite===selected?undefined:selected;saveSettings();updateFavorite();};
+const activities=element<HTMLDialogElement>('activities');
+element('activities-open').onclick=()=>{scene?.mode('activities');activities.showModal();};
+element('activities-close').onclick=()=>activities.close();
+activities.onclose=()=>{if(!document.querySelector('dialog[open]'))scene?.mode(active?'walk':'welcome');};
+// Closing the menu synchronously restores walking before an activity chooses its destination.
+activities.addEventListener('click',event=>{const button=(event.target as Element).closest('button');if(button&&button.id!=='activities-close'){activities.close();scene?.mode('walk');}},true);
+const prayerOptions=element<HTMLDialogElement>('prayer-options'),prayerDock=element('prayer-dock');
+let journey:PrayerJourney|undefined,journeyBusy=false,writingInJourney=false;
+const reflections=['오늘은 마음이 머무는 속도로 걸어도 괜찮습니다.','지금 내려놓을 수 있는 작은 걱정 하나를 떠올려 보세요.','대답을 찾지 않고 잠시 쉬어가도 좋습니다.','오늘 자신에게 건네고 싶은 다정한 말을 떠올려 보세요.','마음에 고마운 얼굴 하나를 조용히 담아 보세요.','다 하지 못한 일은 잠시 여기 두어도 괜찮습니다.','서두르지 않는 숨 한 번으로 시작해 보세요.'];
+const today=new Date();element('daily-reflection').textContent=reflections[Math.floor(Date.UTC(today.getFullYear(),today.getMonth(),today.getDate())/86400000)%reflections.length];
+element('prayer-open').onclick=()=>{if(journey){prayerDock.hidden=false;return;}scene?.mode('journey-options');prayerOptions.showModal();};
+element('prayer-options-close').onclick=()=>prayerOptions.close();prayerOptions.onclose=()=>scene?.mode('walk');
+function renderPrayer(){
+  if(!journey)return;
+  const stage=journey.stage;
+  element('prayer-step').textContent={candle:'01 · 작은 불빛',seat:'02 · 나의 자리',prayer:'03 · 잠시 기도 · '+journey.remaining+'초',complete:'04 · 고요히 마침'}[stage];
+  element('prayer-copy').textContent={candle:'촛불 하나에 오늘의 마음을 담아 보세요.',seat:'빈자리에 앉아 천천히 숨을 고릅니다.',prayer:journey.paused?'잠시 멈췄습니다. 준비되면 이어가세요.':'두 손을 모으고 눈을 감습니다. 어떤 말도 하지 않아도 좋습니다.',complete:'함께한 시간이 끝났습니다. 이 고요함을 가지고 돌아가세요.'}[stage];
+  const action=element<HTMLButtonElement>('prayer-action');action.textContent={candle:scene?.holdingCandle?'촛불 놓고 다음으로':'촛불 켜러 가기',seat:scene?.seated?'기도 시작':'빈자리에 앉기',prayer:'기도 마치기',complete:'본당으로 돌아가기'}[stage];action.disabled=journeyBusy||writingInJourney;
+  if(writingInJourney)element('prayer-copy').textContent='마음을 털어놓는 방으로 걸어갑니다. 중단하려면 기도 그만하기를 눌러주세요.';
+  if(journeyBusy)action.textContent=scene?.effect?'잠시 불빛을 담는 중…':'자리로 걸어가는 중…';
+  element('prayer-skip').hidden=writingInJourney||stage==='complete'||stage==='prayer';
+  element('prayer-pause').hidden=stage!=='prayer';element('prayer-pause').textContent=journey.paused?'이어서 기도하기':'잠시 멈추기';
+  element('prayer-write').hidden=writingInJourney||stage==='complete';element('prayer-end').hidden=stage==='complete';
+}
+function beginPrayerPose(){if(!journey)return;journey.stage='prayer';scene?.setPlayerPraying(true);renderPrayer();}
+function endPrayer(message=true){journey=undefined;journeyBusy=false;writingInJourney=false;prayerDock.hidden=true;scene?.setPlayerPraying(false);if(message)announce('기도를 마쳤습니다. 편히 쉬어가세요.');}
+element('prayer-start').onclick=()=>{stopLiturgy();prayerOptions.close();scene?.mode('walk');journey=new PrayerJourney(Number(element<HTMLSelectElement>('prayer-duration').value));prayerDock.hidden=false;renderPrayer();};
+element('prayer-action').onclick=()=>{
+  if(!journey||!scene)return;
+  if(journey.stage==='candle'){
+    if(scene.holdingCandle){journeyBusy=true;scene.placeCandle(()=>{if(journey?.stage==='candle'){journey.next();journeyBusy=false;renderPrayer();}});renderPrayer();}else{journeyBusy=true;scene.toggleCandle(()=>{journeyBusy=false;renderPrayer();});renderPrayer();}
+  }else if(journey.stage==='seat'){
+    if(scene.seated)beginPrayerPose();else{scene.sit();journeyBusy=scene.navigating;renderPrayer();}
+  }else if(journey.stage==='prayer'){journey.next();scene.setPlayerPraying(false);renderPrayer();}
+  else endPrayer();
+};
+element('prayer-skip').onclick=()=>{if(!journey)return;scene?.cancelWalk();journeyBusy=false;if(journey.stage==='seat'){if(scene?.seated)beginPrayerPose();else{scene?.sit();journeyBusy=!!scene?.navigating;}}else journey.next();renderPrayer();};
+element('prayer-pause').onclick=()=>{if(journey){journey.paused=!journey.paused;renderPrayer();}};
+element('prayer-end').onclick=()=>{scene?.cancelWalk();endPrayer();};
+element('prayer-write').onclick=()=>{if(journey){journey.paused=true;writingInJourney=true;prayerDock.hidden=true;scene?.setPlayerPraying(false);door.click();}};
+function resumePrayerAfterRoom(){if(journey&&writingInJourney){writingInJourney=false;journey.stage='seat';journey.paused=false;journeyBusy=false;prayerDock.hidden=false;renderPrayer();}}
+const liturgyPanel=element<HTMLDialogElement>('liturgy-panel'),liturgyDock=element('liturgy-dock');
+let liturgyElapsed:number|undefined,liturgyPhase=-1,liturgyAudioPaused=false;
+element('liturgy-open').onclick=()=>{scene?.mode('choir');liturgyPanel.showModal();};
+element('liturgy-close').onclick=()=>liturgyPanel.close();liturgyPanel.onclose=()=>scene?.mode('walk');
+function stopLiturgy(){if(liturgyElapsed!==undefined){liturgyElapsed=undefined;liturgyPhase=-1;liturgyAudioPaused=false;scene?.setLiturgy('');stopChoir();syncBackground();}liturgyDock.hidden=true;}
+element('liturgy-start').onclick=()=>{endPrayer(false);stopLiturgy();stopChoir();liturgyPanel.close();scene?.mode('walk');announce('제대 앞으로 이동합니다.');scene?.walkToChoir(()=>{liturgyElapsed=0;liturgyPhase=-1;liturgyDock.hidden=false;});};
+element('liturgy-stop').onclick=stopLiturgy;
+let experienceLast=performance.now();
+function tickExperience(now:number){
+  const delta=Math.min(1,(now-experienceLast)/1000);experienceLast=now;
+  const available=active&&!document.hidden&&!document.querySelector('dialog[open]')&&!releasing&&!gameRunning&&!quietView;
+  if(journey){
+    if(journeyBusy&&!scene?.navigating&&!scene?.effect){journeyBusy=false;}
+    const prior=journey.stage;journey.tick(delta,available&&!scene?.navigating&&!!scene?.seated);
+    if(prior==='prayer'&&(journey.stage==='complete'||!scene?.seated))scene?.setPlayerPraying(false);
+    if(prior==='prayer'&&!scene?.seated){journey.stage='seat';}
+    if(writingInJourney&&!scene?.navigating&&!confessional.open&&!releasing)resumePrayerAfterRoom();
+    prayerDock.hidden=!available;renderPrayer();
+  }
+  liturgyDock.hidden=liturgyElapsed===undefined||!available;
+  if(liturgyElapsed!==undefined&&liturgyPhase===1){
+    if(!available&&!choirAudio.paused){choirAudio.pause();liturgyAudioPaused=true;}
+    else if(available&&liturgyAudioPaused){liturgyAudioPaused=false;void choirAudio.play().catch(()=>{});}
+  }
+  if(liturgyElapsed!==undefined&&available){
+    liturgyElapsed+=delta;const phase=liturgyElapsed<12?0:liturgyElapsed<48?1:2;
+    element('liturgy-phase').textContent=['함께 고개를 숙이는 시간','고요한 빛 · 성가','고요히 마침'][phase]+' · '+Math.max(0,Math.ceil(60-liturgyElapsed))+'초';
+    if(phase!==liturgyPhase){
+      liturgyPhase=phase;scene?.setLiturgy((['prayer','choir','closing'] as const)[phase]);
+      if(phase===1){choirOn=true;scene?.setChoirPlaying(true);choirAudio.currentTime=0;syncBackground();void choirAudio.play().catch(()=>announce('소리를 재생하지 못했습니다. 장면은 조용히 이어집니다.'));}
+      if(phase===2){stopChoir();syncBackground();}
+    }
+    if(liturgyElapsed>=60){stopLiturgy();announce('고요한 시간을 마쳤습니다.');}
+  }
+  requestAnimationFrame(tickExperience);
+}
+requestAnimationFrame(tickExperience);
+try{scene=new Walkthrough(viewport,announce);scene.onSound=actionSound;reducedMotion.checked=preferences.reduced??scene.motionReduced;scene.setReducedMotion(reducedMotion.checked);scene.setLighting(preferences.light);}
 catch{announce('이 브라우저에서 3D를 열 수 없습니다. WebGL 2 설정을 확인해 주세요.',0);}
 function enterCathedral(withSound:boolean){
 
-  backgroundOn=withSound;effectVolume.value=withSound?'0.25':'0';
+  backgroundOn=withSound;effectVolume.value=String(withSound?preferences.effects:0);
   if(withSound){
     failedTracks.clear();
-    if(!Number(ambientVolume.value))ambientVolume.value='0.5';
+    ambientVolume.value=String(preferences.volume);
     if(ambient.ended)ambient.currentTime=0;
   }
   if(!loaded){void switchScene(selected,true);return;}
@@ -462,10 +558,10 @@ function enterCathedral(withSound:boolean){
 }
 enter.onclick=()=>enterCathedral(true);
 enterSound.onclick=()=>enterCathedral(false);
-exit.onclick=()=>{stopChoir();stopActionSounds();backgroundOn=false;syncBackground();present(false);enter.focus();};
+exit.onclick=()=>{endPrayer(false);stopLiturgy();stopChoir();stopActionSounds();backgroundOn=false;syncBackground();present(false);enter.focus();};
 window.setInterval(updateWalkControls,150);
 refreshSceneTitle();
-if(scene)void switchScene('bariloche',false);
+if(scene)void switchScene(selected,false);
 updateMusicProgress();
 syncBackground();
 

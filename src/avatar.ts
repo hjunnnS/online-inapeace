@@ -22,6 +22,11 @@ function tailoredTorso(width:number,waist:number){
   for(let row=0;row<rings.length;row++)for(let i=0;i<=20;i++){const a=i/20*Math.PI*2;positions.push(Math.sin(a)*rings[row][1],rings[row][0],Math.cos(a)*rings[row][1]*.63);uv.push(i/20,row/(rings.length-1));if(row<rings.length-1&&i<20){const p=row*21+i;indices.push(p,p+1,p+21,p+1,p+22,p+21);}}
   const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new T.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
 }
+/** Cheap, soft grounding, kept independent of the articulated hip height. */
+export function makeContactShadow(){
+  const shadow=new T.Mesh(new T.PlaneGeometry(1.3,1.4),new T.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{},vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}',fragmentShader:'varying vec2 vUv;void main(){float d=length((vUv-.5)*2.);float a=pow(max(0.,1.-d),2.)*.34;gl_FragColor=vec4(.045,.035,.025,a);}'}));
+  shadow.name='soft-contact-shadow';shadow.rotation.x=-Math.PI/2;shadow.position.y=.025;return shadow;
+}
 export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=randomHair()){
   const group=new T.Group(),rig=new T.Group(),body=new T.Group(),head=new T.Group();group.add(rig);rig.add(body);body.add(head);
   group.name='avatar-'+avatarPatterns[pattern];
@@ -70,9 +75,10 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
     rounded(hairstyle,hair,-.12,.16,-.1,.14,.13,.14);
   }else{
     cap.scale.set(1,1.05,1);
-    for(let i=0;i<42;i++){
-      const y=.02+(i/42)*.25,angle=i*2.39996,radius=.19*Math.sqrt(Math.max(.05,1-Math.pow((y-.08)/.23,2)));
-      const curl=rounded(hairstyle,hair,Math.cos(angle)*radius,y,Math.sin(angle)*radius+.015,.102,.09,.1);curl.rotation.z=angle;
+    // Overlapping broad locks keep one silhouette instead of separate bead-like curls.
+    for(let i=0;i<14;i++){
+      const angle=i*2.39996,y=.055+(i%4)*.05,radius=.155;
+      const curl=rounded(hairstyle,hair,Math.cos(angle)*radius,y,Math.sin(angle)*radius+.015,.13,.16,.13);curl.rotation.z=Math.sin(angle)*.35;
     }
   }
   const lapel=(x:number,angle:number)=>{const piece=solid(body,light,x,.39,-.185,.1,.32,.035);piece.rotation.z=angle;};
@@ -97,6 +103,8 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
   for(const side of [-1,1]){
     const arm=new T.Group(),elbow=new T.Group(),hand=new T.Group();arm.position.set(side*(width+.025),.46,0);body.add(arm);elbow.position.y=-.29;arm.add(elbow);hand.position.set(0,-.285,0);elbow.add(hand);
     const sleeve=pattern===1?shirt:cloth;
+    rounded(arm,sleeve,0,-.025,0,.155,.18,.15);
+    rounded(elbow,sleeve,0,-.02,0,.12,.12,.12);
     part(arm,new T.CapsuleGeometry(.067,.19,5,12),sleeve,0,-.14,0);
     part(elbow,new T.CapsuleGeometry(.058,.18,5,12),sleeve,0,-.13,0);
     rounded(hand,skin,0,-.01,-.006,.105,.13,.075);rounded(hand,skin,-side*.047,0,-.012,.035,.065,.045);
@@ -124,7 +132,8 @@ export function makeAvatar(color='#344c60',pattern=randomPattern(),hairType=rand
   part(veil,new T.SphereGeometry(.207,24,16,0,Math.PI*2,0,Math.PI*.58),veilMaterial,0,.087,.018);
   const drape=part(veil,new T.CylinderGeometry(.2,.33,.59,28,8,true,Math.PI*.08,Math.PI*1.84),veilMaterial,0,-.17,.055);drape.rotation.y=Math.PI;
   for(const rigid of [body,head,hairstyle,eyesOpen,eyesClosed,prayerHands,...elbows,...hands,...legs,...knees,...feet])mergeRigid(rigid);
-  const avatar={group,rig,body,head,arms,elbows,hands,hand:hands[1],legs,knees,feet,veil,skirt,skirtStanding,lap,pattern,hairType,hairstyle,eyesOpen,eyesClosed,prayerHands,praying:false,pose:{seat:0,gait:0,walk:0}};
+  const shadow=makeContactShadow();group.add(shadow);
+  const avatar={group,rig,body,head,arms,elbows,hands,hand:hands[1],legs,knees,feet,veil,skirt,skirtStanding,lap,pattern,hairType,hairstyle,eyesOpen,eyesClosed,prayerHands,praying:false,shadow,pose:{seat:0,gait:0,walk:0}};
   animateAvatar(avatar,false,0,0,1,true);return avatar;
 }
 export type Avatar=ReturnType<typeof makeAvatar>;
@@ -133,6 +142,7 @@ export function animateAvatar(avatar:Avatar,seated:boolean,speed:number,seconds:
   const state=avatar.pose,blend=reduced||delta>=1?1:1-Math.exp(-Math.max(0,delta)*8);
   state.seat=T.MathUtils.lerp(state.seat,seated?1:0,blend);state.walk=T.MathUtils.lerp(state.walk,speed>0?Math.min(1,speed/1.8):0,blend);
   if(!reduced)state.gait+=Math.min(.1,delta)*speed*4.4;
+  avatar.shadow.position.z=state.seat*.36;
   const seat=state.seat,walk=state.walk*(1-seat),phase=state.gait;
   avatar.rig.scale.set(1,1,1);avatar.rig.position.set(0,T.MathUtils.lerp(.98,.685,seat)+(reduced?0:Math.abs(Math.sin(phase))*walk*.024),seat*.70);
   avatar.body.rotation.x=-Math.sin(seat*Math.PI)*.16-seat*.025;avatar.body.rotation.y=reduced?0:Math.sin(phase)*walk*.035;

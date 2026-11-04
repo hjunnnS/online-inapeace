@@ -1,4 +1,6 @@
 import * as T from 'three';
+import { NavigationIntent } from './intent';
+import { makeContactShadow } from './avatar';
 import { VisitingPeople } from './visitors';
 import { disposeObject as unload } from './resources';
 import { makeAvatar, animateAvatar, makeTaper, makeCandleCorner, makeAltarDecor, makeChoir, makeChristmasTree, makeEntrance, makeWallCandles, Particles, enrichMaterials, makeProjections, markerRing, flicker, type Taper } from './sanctuary';
@@ -75,8 +77,26 @@ export class Walkthrough {
   private ground=new T.Plane(new T.Vector3(0,1,0),0);
   private place?:Place;
   private request=0;
-  private path:T.Vector3[]=[];
-  private arrival?:()=>void;
+  private navigation=new NavigationIntent<T.Vector3>();
+  private get path(){return this.navigation.path;}
+  private set path(value:T.Vector3[]){this.navigation.path=value;}
+  private get arrival(){return this.navigation.arrival;}
+  private set arrival(value:(()=>void)|undefined){this.navigation.arrival=value;}
+  private points=barilochePoints;
+  private candleStop=candleStop.clone();
+  private local=true;
+  private officiant?:ReturnType<typeof makeAvatar>;
+  private liturgyPhase:''|'prayer'|'choir'|'closing'='';
+  setLiturgy(phase:''|'prayer'|'choir'|'closing'){this.liturgyPhase=phase;if(phase){this.framing=this.points.altar.view;this.cinematic=false;}}
+  setPlayerPraying(praying:boolean){this.avatar.praying=praying;if(praying&&this.seated){this.cinematic=true;this.framing=this.points.altar.view;}}
+  get playerPraying(){return this.avatar.praying;}
+  get navigating(){return this.path.length>0;}
+  cancelWalk(){this.clear();}
+  private nearestValid(target:T.Vector3){
+    if(this.valid(target.x,target.z))return target;
+    for(let r=.4;r<4;r+=.4)for(let i=0;i<16;i++){const a=i*Math.PI/8,p=target.clone().add(new T.Vector3(Math.cos(a)*r,0,Math.sin(a)*r));if(this.valid(p.x,p.z))return p;}
+    return this.place!.spawn.clone();
+  }
   private keys=new Set<string>();
   private yaw=0;
   private pitch=.16;
@@ -100,8 +120,8 @@ export class Walkthrough {
   private choirPlaying=false;
   private conductBeat=0;
   setChoirPlaying(playing:boolean){this.choirPlaying=playing;}
-  get choirDistance(){return this.position.distanceTo(barilochePoints.altar.stop);}
-  walkToChoir(done:()=>void){if(this.candle)this.go(barilochePoints.altar.stop,()=>{this.framing=barilochePoints.altar.view;done();});}
+  get choirDistance(){return this.position.distanceTo(this.points.altar.stop);}
+  walkToChoir(done:()=>void){if(this.candle)this.go(this.points.altar.stop,()=>{this.framing=this.points.altar.view;done();});}
   startConduct(){
     this.clear();this.seated=false;this.position.set(0,0,-10.7);this.avatar.group.rotation.y=0;
     this.mode('conduct');this.choirPlaying=true;
@@ -110,7 +130,7 @@ export class Walkthrough {
   finishConduct(){
     this.choirPlaying=false;
     if(this.choir)this.choir.spotlight.visible=false;
-    this.mode('walk');this.framing=barilochePoints.altar.view;this.cinematic=true;
+    this.mode('walk');this.framing=this.points.altar.view;this.cinematic=true;
   }
   conductHit(){this.conductBeat=.3;this.particles.start(this.position.clone().setY(1.1));}
   capturePhoto(front:boolean){
@@ -184,9 +204,9 @@ export class Walkthrough {
     const done=this.ceremony?.done;
     this.ceremony=undefined;this.particles.stop();this.cinematic=false;done?.();
   }
-  placeCandle(){
+  placeCandle(done?:()=>void){
     if(this.blocked||!this.candle||!this.carried)return;
-    this.go(candleStop,()=>{
+    this.go(this.candleStop,()=>{
       const taper=this.carried;if(!taper||!this.candle)return;
       this.carried=undefined;this.placed.push(taper);
       if(this.placed.length>8){const old=this.placed.shift();if(old)unload(old.root);}
@@ -194,17 +214,17 @@ export class Walkthrough {
       taper.root.position.set(-.65+(this.placed.length-1)%4*.4,1.25,-.12+Math.floor((this.placed.length-1)/4)*.24);
       taper.root.rotation.set(0,0,0);this.handLight.visible=false;
       this.cinematic=true;this.particles.start(this.candle.group.position.clone().setY(1.5));
-      this.ceremony={kind:'candle',elapsed:0,duration:1.4};this.onSound('candle');
+      this.ceremony={kind:'candle',elapsed:0,duration:1.4,done};this.onSound('candle');
       this.notice('촛대에 초를 놓았습니다.');
     });
   }
   hotspots(){
-    if(this.view!=='walk'||this.quiet||!this.candle||this.ceremony)return [];
+    if(this.view!=='walk'||this.quiet||this.avatar.praying||this.liturgyPhase||!this.candle||this.ceremony)return [];
     const spots=[
-      {id:'candle',label:this.carried?'촛불 놓기':'촛불 켜기',position:candleStop},
+      {id:'candle',label:this.carried?'촛불 놓기':'촛불 켜기',position:this.candleStop},
       {id:'confess',label:'고해소',position:this.place!.door},
-      {id:'choir',label:'성가대 감상',position:barilochePoints.altar.stop},
-      {id:'tree',label:'크리스마스 트리',position:barilochePoints.tree.stop},
+      ...(this.local?[{id:'choir',label:'성가대 감상',position:this.points.altar.stop}]:[]),
+      ...(this.local?[{id:'tree',label:'크리스마스 트리',position:this.points.tree.stop}]:[]),
       {id:'sit',label:this.seated?'일어나기':'앉기',position:[...this.place!.seats].sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0]},
     ];
     return spots.filter(spot=>spot.position.distanceTo(this.position)<5).flatMap(spot=>{
@@ -237,7 +257,7 @@ export class Walkthrough {
   toggleCandle(onChange:()=>void){
     if(this.blocked||!this.candle)return;
     if(this.carried){this.placeCandle();return;}
-    this.go(candleStop,()=>{
+    this.go(this.candleStop,()=>{
       if(!this.candle||this.carried)return;
       this.carried=makeTaper();this.avatar.hand.add(this.carried.root);
       this.carried.root.rotation.x=-.9;this.handLight.visible=true;
@@ -250,13 +270,13 @@ export class Walkthrough {
 
   visit(point:keyof typeof barilochePoints){
     if(!this.candle)return;
-    const {stop,view}=barilochePoints[point];
-    this.go(stop,()=>{this.framing=view;this.notice({altar:'제대 앞에 도착했습니다.',glass:'스테인드글라스 가까이에 도착했습니다.',tree:'본당 뒤편의 크리스마스 트리입니다.',entrance:'본당 뒤편의 대형 출입문입니다.'}[point]);});
+    const {stop,view}=this.points[point];
+    this.go(stop,()=>{this.framing=view;this.notice({altar:'제대 앞에 도착했습니다.',glass:'스테인드글라스 가까이에 도착했습니다.',tree:'본당 뒤편의 크리스마스 트리입니다.',entrance:this.local?'본당 뒤편의 대형 출입문입니다.':'입구 쪽 관람 지점에 도착했습니다.'}[point]);});
   }
 
   setQuiet(quiet:boolean){
     this.quiet=quiet;
-    if(quiet&&this.seated)this.framing=barilochePoints.altar.view;
+    if(quiet&&this.seated)this.framing=this.points.altar.view;
     this.clear();
   }
   constructor(host:HTMLElement, notice:(message:string)=>void){
@@ -285,7 +305,7 @@ export class Walkthrough {
     canvas.addEventListener('wheel',this.wheel,{passive:false});
     window.addEventListener('keydown',this.keyDown);
     window.addEventListener('keyup',this.keyUp);
-    window.addEventListener('blur',this.clear);
+    window.addEventListener('blur',this.clearInput);
     this.frame=requestAnimationFrame(this.tick);
   }
   get position(){return this.avatar.group.position;}
@@ -301,15 +321,21 @@ export class Walkthrough {
     try{next=decode(gltf.scene);}catch(error){unload(gltf.scene);throw error;}
     this.skipEffect();
     if(this.carried)unload(this.carried.root);
-    this.carried=undefined;this.placed=[];this.markers=[];this.backgroundPeople=[];this.visitors=undefined;this.choirPlaying=false;this.avatar.veil.visible=false;
+    this.carried=undefined;this.placed=[];this.markers=[];this.backgroundPeople=[];this.visitors=undefined;this.choirPlaying=false;this.avatar.veil.visible=false;this.avatar.praying=false;
     this.handLight.visible=false;
     if(this.place)unload(this.place.root);
     this.place=next;this.scene.add(next.root);
-    this.candle=id==='bariloche'?makeCandleCorner():undefined;
-    if(this.candle){
-      enrichMaterials(next.root);
+    this.local=id==='bariloche';this.points=barilochePoints;this.candleStop=candleStop.clone();
+    enrichMaterials(next.root);
+    this.candle=makeCandleCorner();
+    if(this.local){
       this.altarDecor=makeAltarDecor();next.root.add(this.altarDecor.group);
       this.choir=makeChoir();next.root.add(this.choir.group);
+      this.officiant=makeAvatar('#e4d9be',2,0);this.officiant.group.name='quiet-officiant';
+      this.officiant.group.position.set(0,.32,-13.4);this.officiant.group.rotation.y=Math.PI;
+      const robe=new T.Mesh(new T.CylinderGeometry(.25,.4,1.1,24),new T.MeshStandardMaterial({color:'#e8dfce',roughness:.95}));robe.position.y=.59;this.officiant.group.add(robe);
+      const stole=new T.Mesh(new T.BoxGeometry(.11,.72,.03),new T.MeshStandardMaterial({color:'#b89b62',roughness:.65}));stole.position.set(0,1.3,-.18);this.officiant.group.add(stole);
+      next.root.add(this.officiant.group);
       this.christmasTree=makeChristmasTree();next.root.add(this.christmasTree.group);
       next.root.add(makeEntrance());next.blockers.push({x:.1,z:18.6,width:5.3,depth:.5});
       next.blockers.push({x:-6.15,z:15.8,width:4.15,depth:4.15});
@@ -334,13 +360,27 @@ export class Walkthrough {
       next.blockers.push({x:6.15,z:13.25,width:1.9,depth:.8});
       this.wallCandles=makeWallCandles();next.root.add(this.wallCandles.group);
       this.projections=makeProjections();next.root.add(this.projections.group);
-      for(const target of [candleStop,next.door,barilochePoints.altar.stop]){
+      for(const target of [this.candleStop,next.door,this.points.altar.stop]){
         const ring=markerRing();ring.position.x=target.x;ring.position.z=target.z;next.root.add(ring);this.markers.push(ring);
       }
     }else{
-      this.christmasTree=undefined;this.choir=undefined;this.altarDecor=undefined;this.wallCandles=undefined;this.projections=undefined;
+      this.christmasTree=undefined;this.choir=undefined;this.officiant=undefined;this.altarDecor=undefined;this.wallCandles=undefined;this.projections=undefined;
+      const [,right,front,back]=next.bounds;
+      const altar=this.nearestValid(new T.Vector3(0,0,front+6.6));
+      this.points={altar:{stop:altar,view:new T.Vector3(0,2.7,front+3.1)},glass:{stop:this.nearestValid(new T.Vector3(right-1.6,0,0)),view:new T.Vector3(right,6,0)},entrance:{stop:next.spawn.clone(),view:new T.Vector3(0,3,back)},tree:{stop:next.spawn.clone(),view:new T.Vector3(0,3,back)}};
+      const corner=new T.Vector3(right-1.4,0,back-3);
+      this.candle.group.position.copy(corner);next.root.add(this.candle.group);
+      next.blockers.push({x:corner.x,z:corner.z,width:1.9,depth:.8});
+      this.candleStop=this.nearestValid(corner.clone().add(new T.Vector3(0,0,1.25)));
+      const colors=['#6d665b','#65596c','#576e72','#89765d'];
+      next.seats.filter((_,i)=>i%5===0).slice(0,4).forEach((seat,i)=>{const avatar=makeAvatar(colors[i]);avatar.group.position.copy(seat);avatar.veil.visible=i%2===0;avatar.praying=true;animateAvatar(avatar,true,0,0,1,true);next.root.add(avatar.group);this.backgroundPeople.push({avatar,seated:true,phase:i});});
+      for(const target of [this.candleStop,next.door,altar]){const ring=markerRing();ring.position.x=target.x;ring.position.z=target.z;next.root.add(ring);this.markers.push(ring);}
+      this.altarLight.position.set(0,4,front+4);
+
     }
-    this.setLighting('day');
+    if(this.local)this.altarLight.position.set(0,4.3,-13.7);
+    for(const seat of next.seats){const shadow=makeContactShadow();shadow.name='pew-contact-shadow';shadow.scale.set(2.8,1,1);shadow.position.set(seat.x,.018,seat.z+.77);next.root.add(shadow);}
+    this.setLighting(this.lightPreset);
     this.altarLight.visible=!!this.candle;
     this.framing=undefined;
     this.quiet=false;
@@ -349,17 +389,18 @@ export class Walkthrough {
     return true;
   }
   mode(view:string){
-    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points'&&view!=='reflection'&&view!=='photo'&&view!=='choir')this.framing=undefined;
+    if(view!=='walk'&&view!=='audio'&&view!=='catalog'&&view!=='points'&&view!=='reflection'&&view!=='photo'&&view!=='choir'&&view!=='activities'&&view!=='journey-options')this.framing=undefined;
 
     this.altarLight.visible=!!this.candle&&view!=='room';
     if(view==='room'){this.cameraEye.set(28.15,1.43,2.47);this.cameraTarget.set(30.05,1.24,-2.2);}
     if(view==='welcome'||view==='loading')this.skipEffect();
     this.view=view;this.avatar.group.visible=view==='walk';this.privateRoom.visible=view==='room';
     if(this.place)this.place.root.visible=view!=='room';
-    this.clear();
+    this.clearInput();this.navigation.transition(view);
   }
   get blocked(){return this.view!=='walk'||!this.place||this.quiet||!!this.ceremony;}
-  private clear=()=>{this.keys.clear();this.path=[];this.arrival=undefined;this.pressed=undefined;};
+  private clearInput=()=>{this.keys.clear();this.pressed=undefined;};
+  private clear=()=>{this.clearInput();this.navigation.cancel();};
   private keyDown=(e:KeyboardEvent)=>{
     const k=e.key.toLowerCase();
     if(this.blocked||e.altKey||e.metaKey||e.ctrlKey||!(k in keyDirections)||e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target instanceof HTMLSelectElement)return;
@@ -433,7 +474,7 @@ export class Walkthrough {
   private go(target:T.Vector3, onArrival?:()=>void){
     if(this.blocked)return;
     if(this.seated)this.standDelay=.6;
-    this.seated=false;this.cinematic=false;this.framing=undefined;this.clear();
+    this.seated=false;this.avatar.praying=false;this.cinematic=false;this.framing=undefined;this.clear();
     if(this.position.distanceTo(target)<.18){onArrival?.();return;}
     this.path=this.route(target);
     if(!this.path.length){this.notice('이동할 수 있는 바닥을 선택해 주세요.');return;}
@@ -444,7 +485,7 @@ export class Walkthrough {
     if(this.seated){this.seated=false;this.standDelay=.6;this.cinematic=false;this.framing=undefined;this.notice('일어났습니다.');return;}
     const nearest=this.place.seats.filter(seat=>!this.backgroundPeople.some(person=>person.seated&&person.avatar.group.position.distanceToSquared(seat)<.1)&&!this.visitors?.reservedSeats.some(home=>home.distanceToSquared(seat)<.1)).sort((a,b)=>a.distanceToSquared(this.position)-b.distanceToSquared(this.position))[0];
     if(!nearest){this.notice('빈 좌석이 없습니다.');return;}
-    this.go(nearest,()=>{this.seated=true;if(this.candle){this.cinematic=true;this.framing=barilochePoints.altar.view;}this.onSound('sit');this.notice('잠시 앉아 쉬어가세요.');});
+    this.go(nearest,()=>{this.seated=true;if(this.candle){this.cinematic=true;this.framing=this.points.altar.view;}this.onSound('sit');this.notice('잠시 앉아 쉬어가세요.');});
   }
   walkToDoor(enter:()=>void){if(this.place)this.go(this.place.door,enter);}
   private move(dx:number,dz:number){
@@ -465,18 +506,24 @@ export class Walkthrough {
     const seconds=now/1000;
     this.projections?.tick(seconds,this.reducedMotion);
     this.conductBeat=Math.max(0,this.conductBeat-delta);
+    if(this.officiant){
+      animateAvatar(this.officiant,false,0,seconds,delta,this.reducedMotion);
+      this.officiant.head.rotation.x=this.liturgyPhase==='prayer'?-.22:0;
+      this.officiant.arms.forEach((arm,i)=>{arm.rotation.x=this.liturgyPhase==='choir'?.6:this.liturgyPhase==='closing'?.85:.32;arm.rotation.z=(i?1:-1)*(this.liturgyPhase==='closing'?.42:.1);});
+      this.officiant.elbows.forEach(elbow=>elbow.rotation.x=.5);
+    }
     if(this.choir){
       this.choir.people.forEach((person,i)=>{
         person.rig.rotation.z=this.choirPlaying&&!this.reducedMotion?Math.sin(seconds*2+i*.3)*.025:0;
         person.arms.forEach(arm=>arm.rotation.x=.65+(this.choirPlaying?Math.sin(seconds*3+i)*.04:0));
       });
+    }
       for(const person of this.backgroundPeople){
         if(person.taper)flicker(person.taper,seconds,person.phase,this.reducedMotion);
         animateAvatar(person.avatar,person.seated,0,seconds,delta,this.reducedMotion);
 
       }
-    }
-    this.visitors?.tick(delta,seconds,this.reducedMotion||!['walk','welcome'].includes(this.view),this.position);
+    this.visitors?.tick(delta,seconds,this.reducedMotion||this.avatar.praying||!!this.liturgyPhase||!['walk','welcome'].includes(this.view),this.position);
     this.christmasTree?.tick(seconds,this.reducedMotion);
     this.wallCandles?.tapers.forEach((taper,i)=>flicker(taper,seconds,i*1.7,this.reducedMotion));
     if(this.candle){
@@ -486,7 +533,7 @@ export class Walkthrough {
       this.markers.forEach(ring=>{const nearby=ring.position.distanceTo(this.position)<5;ring.visible=nearby&&this.view==='walk'&&!this.quiet;ring.scale.setScalar(this.reducedMotion?1:1+Math.sin(seconds*2)*.05);});
     }
     if(this.carried){flicker(this.carried,seconds,0,this.reducedMotion);this.carried.root.getWorldPosition(this.handLight.position);this.handLight.position.y+=.4;}
-    this.handLight.visible=!!this.carried&&this.view==='walk';
+    this.handLight.visible=!!this.carried&&this.view==='walk'&&!this.avatar.praying;
 
     let moved=0;
     this.standDelay=Math.max(0,this.standDelay-delta);
@@ -496,7 +543,7 @@ export class Walkthrough {
       if(direction.lengthSq()){if(this.seated){this.seated=false;this.standDelay=.6;}else{direction.normalize().applyAxisAngle(T.Object3D.DEFAULT_UP,this.yaw);moved=this.move(direction.x*delta*2.2,direction.z*delta*2.2);}}
       else if(this.path.length){
         direction.subVectors(this.path[0],this.position);
-        if(direction.length()<.004){this.path.shift();if(!this.path.length){const done=this.arrival;this.arrival=undefined;done?.();}}
+        if(direction.length()<.004){this.path.shift();if(!this.path.length){this.navigation.complete();}}
         else{const speed=Math.min(delta*2.4,direction.length());direction.normalize();moved=this.move(direction.x*speed,direction.z*speed);if(!moved&&delta>0){this.clear();this.notice('통로가 막혔습니다. 다른 위치를 선택해 주세요.');}}
       }
       if(moved){const angle=Math.atan2(-direction.x,-direction.z),difference=T.MathUtils.euclideanModulo(angle-this.avatar.group.rotation.y+Math.PI,Math.PI*2)-Math.PI;this.avatar.group.rotation.y+=difference*Math.min(1,delta*12);}
@@ -505,7 +552,7 @@ export class Walkthrough {
     if(this.seated){const difference=T.MathUtils.euclideanModulo(-this.avatar.group.rotation.y+Math.PI,Math.PI*2)-Math.PI;this.avatar.group.rotation.y+=difference*Math.min(1,delta*9);}
     animateAvatar(this.avatar,this.seated,delta?moved/delta:0,seconds,delta,this.reducedMotion);
     if(this.ceremony?.kind==='veil'&&!this.reducedMotion)this.avatar.veil.scale.y*=.9+.1*Math.min(1,this.ceremony.elapsed/.6);
-    if(this.carried){this.avatar.arms[1].rotation.x=.2;this.avatar.elbows[1].rotation.x=1;this.avatar.hand.getWorldQuaternion(this.carried.root.quaternion);this.carried.root.quaternion.invert();}
+    if(this.carried&&!this.avatar.praying){this.avatar.arms[1].rotation.x=.2;this.avatar.elbows[1].rotation.x=1;this.avatar.hand.getWorldQuaternion(this.carried.root.quaternion);this.carried.root.quaternion.invert();}
     if(this.view==='conduct'){
       this.avatar.arms[0].rotation.x=.8+Math.sin(seconds*4)*.22;
       this.avatar.arms[1].rotation.x=1.1+this.conductBeat*1.2;
@@ -513,14 +560,14 @@ export class Walkthrough {
     }
     const desiredEye=new T.Vector3(),desiredTarget=new T.Vector3();
     if(this.view==='conduct'){
-      desiredEye.set(-2.5,2.5,-8);desiredTarget.set(0,1.8,-16);
+      desiredEye.set(0,3.3,-10.3);desiredTarget.set(0,2.3,-16.6);
     }else if(this.view==='release'){
       const progress=this.ceremony?this.ceremony.elapsed/this.ceremony.duration:1;
       desiredEye.set(1.5,1.8+progress*1.4,10);
       desiredTarget.set(0,3+progress*5,7);
     }else if(this.view==='welcome'){
-      if(this.candle){
-        desiredEye.set(-1,2.45,18);desiredTarget.set(.1,2.6,-15);
+      if(this.place){
+        desiredEye.copy(this.place.spawn).add(new T.Vector3(-1,2.45,1));desiredTarget.copy(this.points.altar.view);
       }else{
         desiredEye.set(-2.25,2.65,16.9);desiredTarget.set(2.5,3.55,-15);
       }
@@ -543,12 +590,15 @@ export class Walkthrough {
     const blend=this.reducedMotion||!this.cameraEye.lengthSq()?1:1-Math.exp(-delta*7);
     this.cameraEye.lerp(desiredEye,blend);this.cameraTarget.lerp(desiredTarget,blend);
     this.camera.position.copy(this.cameraEye);this.camera.lookAt(this.cameraTarget);
-    this.avatar.group.visible=this.view!=='room'&&this.view!=='release'&&this.view!=='welcome'&&(!this.framing||this.cinematic&&!this.quiet);
+    this.avatar.group.visible=this.view!=='conduct'&&this.view!=='room'&&this.view!=='release'&&this.view!=='welcome'&&(!this.framing||this.cinematic&&!this.quiet);
+    // Keep the activity view clear of visitors close to its lens; restore outside the activity.
+    for(const person of this.backgroundPeople)person.avatar.group.visible=(this.view!=='conduct'&&!this.liturgyPhase)||person.avatar.group.position.z<-12;
+    if(this.visitors)this.visitors.root.visible=this.view!=='conduct'&&!this.liturgyPhase;
     this.renderer.render(this.scene,this.camera);this.frame=requestAnimationFrame(this.tick);
   };
   dispose(){
     this.request++;cancelAnimationFrame(this.frame);this.observer.disconnect();
-    window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);window.removeEventListener('blur',this.clear);
+    window.removeEventListener('keydown',this.keyDown);window.removeEventListener('keyup',this.keyUp);window.removeEventListener('blur',this.clearInput);
     if(this.place)unload(this.place.root);unload(this.avatar.group);unload(this.privateRoom);unload(this.particles.root);
     const canvas=this.renderer.domElement;
     canvas.removeEventListener('pointerdown',this.pointerDown);canvas.removeEventListener('pointermove',this.pointerMove);

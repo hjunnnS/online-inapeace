@@ -1,19 +1,28 @@
 <!doctype html>
-<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="바릴로체 성당의 본당을 걸으며 잠시 쉬어가는 브라우저 시제품."><title>In a Peace · 바릴로체</title></head>
+<html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="description" content="열 곳의 성당 공간을 걸으며 촛불을 켜고 조용히 기도하고 마음을 내려놓는 웹 체험."><title>In a Peace · 바릴로체</title></head>
 <body><main id="app">
 <div id="viewport" aria-label="성당 3D 장면"></div>
-<header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small><small id="background-note" hidden>가상 신자 20명과 오가는 방문자 3명</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="background-quick" type="button" aria-pressed="false" hidden>배경음 켜기</button><button id="audio-open" type="button">♪ 음악</button><button id="exit" type="button" hidden>나가기</button></div></header>
+<header id="header"><div class="brand"><span class="mark">✧</span><div>IN A PEACE<small id="region">바릴로체 · 아르헨티나</small><small id="background-note" hidden>가상 신자 20명과 오가는 방문자 3명</small></div></div><div class="top-actions"><button id="catalog-open" type="button">성당 둘러보기</button><button id="audio-open" type="button">♪ 음악</button><button id="exit" type="button" hidden>나가기</button></div></header>
 <section id="welcome" class="welcome"><div class="entry"><p id="scene-index" class="eyebrow">CATHEDRALS · 01</p><h1 id="scene-name">바릴로체 대성당</h1><p class="intro">색유리 사이로 들어오는 빛을 따라<br>잠시 천천히 걸어보세요.</p><button id="enter" class="primary" type="button">성당에 들어가기 <span>→</span></button><button id="enter-sound" type="button">소리 없이 들어가기</button><p class="fine">참고 자료를 바탕으로 재구성한 공간</p></div></section>
 <div id="hotspots" aria-label="가까운 공간의 활동"></div>
 <div id="notice" class="notice" role="status" hidden></div>
 <button id="retry" class="retry" type="button" hidden>다시 불러오기</button>
-<footer id="controls" hidden><span>WASD / 방향키 · 바닥 클릭으로 이동<br>드래그로 둘러보기 · 휠로 확대/축소</span><div><button id="choir-open" type="button" hidden>성가대</button><button id="photo-open" type="button" hidden>기념사진</button><button id="veil" type="button" hidden>미사포 쓰기</button><button id="reflection-open" type="button" hidden>조명 · 묵주</button><button id="points-open" type="button" hidden>관람 지점</button><button id="candle" type="button" hidden>촛불 켜기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">고해소로 걷기</button></div></footer>
+<footer id="controls" hidden><span>바닥을 눌러 걷기 · 드래그로 둘러보기<br>WASD / 방향키 · 휠로 확대/축소</span><div><button id="prayer-open" type="button">✧ 잠시 기도하기</button><button id="sit" type="button">앉기</button><button id="confess" type="button">마음 털어놓기</button><button id="quiet" type="button" hidden>조용히 보기</button><button id="activities-open" type="button">더 둘러보기</button></div></footer>
+<dialog id="activities" aria-labelledby="activities-title"><div class="panel-head"><h2 id="activities-title">이곳에서 천천히</h2><button id="activities-close" aria-label="활동 메뉴 닫기" type="button">✕</button></div>
+<p class="fine" id="experience-scope">10개 공간에서 걷기·촛불·착석·기도·마음 털어놓기를 체험할 수 있습니다.</p>
+<h3>마음과 의례</h3><div class="activity-grid"><button id="candle" type="button">촛불 켜기</button><button id="veil" type="button">미사포 쓰기</button><button id="choir-open" type="button">성가대</button><button id="liturgy-open" type="button">조용한 집전 장면</button></div>
+<h3>탐색과 환경</h3><div class="activity-grid"><button id="points-open" type="button">관람 지점</button><button id="photo-open" type="button">기념사진</button><button id="reflection-open" type="button">조명 · 묵주</button></div></dialog>
+<dialog id="prayer-options" aria-labelledby="prayer-title"><div class="panel-head"><h2 id="prayer-title">잠시 마음을 쉬게 할까요?</h2><button id="prayer-options-close" type="button" aria-label="기도 안내 닫기">✕</button></div><p id="daily-reflection"></p><p>촛불을 켜고, 빈자리에 앉아, 두 손을 모으고 잠시 머뭅니다. 각 단계는 건너뛸 수 있습니다.</p><label for="prayer-duration">머무는 시간</label><select id="prayer-duration"><option value="30">30초</option><option value="60" selected>1분</option><option value="180">3분</option></select><button id="prayer-start" class="primary" type="button">나의 기도 시작</button><p class="fine">종교와 관계없이 쉬어가도 괜찮습니다. 기도 내용과 기록은 저장하지 않습니다.</p></dialog>
+<section id="prayer-dock" class="journey-dock" aria-label="나의 기도" hidden><p id="prayer-step" role="status"></p><p id="prayer-copy"></p><div class="dialog-actions"><button id="prayer-action" class="primary" type="button"></button><button id="prayer-skip" type="button">이 단계 건너뛰기</button><button id="prayer-pause" type="button" hidden>잠시 멈추기</button><button id="prayer-write" type="button">마음 털어놓기</button><button id="prayer-end" type="button">기도 그만하기</button></div></section>
+<dialog id="liturgy-panel" aria-labelledby="liturgy-title"><div class="panel-head"><h2 id="liturgy-title">제대 앞의 고요한 시간</h2><button id="liturgy-close" aria-label="집전 장면 안내 닫기" type="button">✕</button></div><p>집전자와 함께 잠시 고개를 숙이고, 성가를 듣고, 고요히 마칩니다.</p><p class="fine">기도 12초 · 성가 36초 · 마침 12초. 분위기를 위한 창작 연출이며 실제 미사나 성사를 대신하지 않습니다. 바릴로체 공간에서 체험할 수 있습니다.</p><button id="liturgy-start" class="primary" type="button">제대 앞으로 가기</button></dialog>
+<section id="liturgy-dock" class="liturgy-dock" hidden aria-label="조용한 집전 장면"><span id="liturgy-phase" role="status"></span><button id="liturgy-stop" type="button">장면 마치기</button></section>
+
 <div id="effect-panel" hidden><p>잠시 마음을 내려놓습니다.</p><button id="effect-skip" type="button">연출 건너뛰기 · Esc</button></div>
 <output id="qa-status" hidden></output>
 <button id="quiet-exit" type="button" hidden>조작 버튼 다시 보기 <span aria-hidden="true">· Esc</span></button>
 <dialog id="reflection" aria-labelledby="reflection-title">
   <div class="panel-head"><h2 id="reflection-title">조명과 묵주</h2><button id="reflection-close" type="button" aria-label="조명과 묵주 닫기">✕</button></div>
-  <label for="light-preset">본당 조명</label>
+  <button id="favorite" type="button" aria-pressed="false">이 성당을 즐겨찾기</button><p id="preference-status" class="fine">즐겨찾기와 환경 설정만 이 기기에 기억합니다.</p><label for="light-preset">본당 조명</label>
   <select id="light-preset"><option value="day">낮 · 기본</option><option value="dusk">해질녘</option><option value="night">밤</option></select>
 <label><input id="reduced-motion" type="checkbox"> 움직임과 효과 줄이기</label>
   <section class="rosary" aria-labelledby="rosary-title">
@@ -47,7 +56,7 @@
   <p id="photo-status" role="status"></p>
 </dialog>
 <dialog id="points" aria-labelledby="points-title">
-  <div class="panel-head"><h2 id="points-title">바릴로체 관람 지점</h2><button id="points-close" type="button" aria-label="관람 지점 닫기">✕</button></div>
+  <div class="panel-head"><h2 id="points-title">관람 지점</h2><button id="points-close" type="button" aria-label="관람 지점 닫기">✕</button></div>
   <p>지점을 고르면 가까이 걸어가 그곳을 바라봅니다.</p>
   <div class="point-list">
     <button id="point-altar" type="button">제대 앞<small>본당 중앙에서 제대와 그 뒤의 아치를 바라봅니다.</small></button>
@@ -56,7 +65,7 @@
     <button id="point-glass" type="button">스테인드글라스<small>오른쪽 통로에서 색유리 창을 가까이 올려다봅니다.</small></button>
   </div>
 </dialog>
-<dialog id="catalog" aria-labelledby="catalog-title"><div class="panel-head"><div><p class="eyebrow">CATHEDRALS · 10</p><h2 id="catalog-title">어디에서 쉬어갈까요?</h2></div><button id="catalog-close" type="button" aria-label="성당 목록 닫기">✕</button></div><p class="fine">공식 자료를 참고해 본당 일부를 재구성했습니다.</p><ul id="catalog-items"></ul></dialog>
+<dialog id="catalog" aria-labelledby="catalog-title"><div class="panel-head"><div><p class="eyebrow">CATHEDRALS · 10</p><h2 id="catalog-title">어디에서 쉬어갈까요?</h2></div><button id="catalog-close" type="button" aria-label="성당 목록 닫기">✕</button></div><p class="fine">공식 자료를 참고해 본당 일부를 재구성했습니다. 10곳 모두 기본 기도 체험을 제공하며, 성가대·집전 장면·트리는 바릴로체 전용입니다.</p><ul id="catalog-items"></ul></dialog>
 <dialog id="confessional" aria-labelledby="confessional-title"><p class="eyebrow">PRIVATE SPACE</p><h2 id="confessional-title">마음을 내려놓는 방</h2><p id="privacy">여기에 쓴 글은 이 앱이 전송하거나 저장하지 않습니다. 방을 나가면 입력이 지워집니다. 이 공간은 마음을 정리하는 체험입니다. 실제 고해성사나 사제의 응답을 제공하지 않습니다.</p><label for="thought">지금 마음에 있는 말</label><textarea id="thought" aria-describedby="privacy" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" rows="5" placeholder="비워 두어도 괜찮아요"></textarea><div class="dialog-actions"><button id="cancel" type="button">취소하고 나가기</button><button id="release" type="button" class="primary">글 내려놓기</button></div></dialog>
 <dialog id="audio-panel"><div class="panel-head"><div><p class="eyebrow">LISTEN</p><h2>잠시 듣기</h2></div><button id="audio-close" type="button" aria-label="음악 설정 닫기">✕</button></div>
 <p id="music-title" class="music-title"></p><p id="background-info" class="fine"></p>
